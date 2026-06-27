@@ -4,6 +4,7 @@ import json
 import secrets
 import random
 import string
+import threading
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, send_file, session, redirect, url_for, render_template
@@ -198,15 +199,15 @@ def get_user_id():
     return session.get('user_id')
 
 # ============================================================================
-# EMAIL HELPER FUNCTIONS
+# EMAIL HELPER FUNCTIONS (NON-BLOCKING)
 # ============================================================================
 
 def generate_otp():
     """Generate a 6-digit OTP"""
     return ''.join(random.choices(string.digits, k=OTP_LENGTH))
 
-def send_otp_email(email, otp, username):
-    """Send OTP via email"""
+def send_otp_email_async(email, otp, username):
+    """Send OTP via email in background thread"""
     if not MAIL_USERNAME or not MAIL_PASSWORD:
         print(f"⚠ Email not configured. OTP for {email}: {otp}")
         return True
@@ -252,7 +253,6 @@ def send_otp_email(email, otp, username):
 
         msg.attach(MIMEText(html_body, 'html'))
 
-        # Send email
         server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT)
         if MAIL_USE_TLS:
             server.starttls()
@@ -260,10 +260,34 @@ def send_otp_email(email, otp, username):
         server.send_message(msg)
         server.quit()
         
+        print(f"✓ Email sent to {email}")
         return True
     except Exception as e:
         print(f"✗ Email send error: {e}")
         return False
+
+def send_otp_email(email, otp, username):
+    """Send OTP via email (non-blocking)"""
+    # Always print OTP to console (for Railway logs)
+    print(f"📧 OTP for {email}: {otp}")
+    
+    # Send email in background thread (non-blocking)
+    thread = threading.Thread(target=send_otp_email_async, args=(email, otp, username))
+    thread.daemon = True
+    thread.start()
+    
+    return True
+
+def send_password_reset_email(email, otp, username):
+    """Send password reset OTP via email (non-blocking)"""
+    print(f"📧 Password Reset OTP for {email}: {otp}")
+    
+    # Send in background thread
+    thread = threading.Thread(target=send_otp_email_async, args=(email, otp, username))
+    thread.daemon = True
+    thread.start()
+    
+    return True
 
 # ============================================================================
 # HELPER FUNCTIONS - PDF EXTRACTION
@@ -537,7 +561,7 @@ def send_otp():
             
             conn.commit()
             
-            # Send OTP via email
+            # Send OTP via email (non-blocking)
             send_otp_email(email, otp, username)
             
             return jsonify({
@@ -744,7 +768,7 @@ def resend_otp():
             
             conn.commit()
             
-            # Send OTP
+            # Send OTP (non-blocking)
             send_otp_email(email, otp, 'User')
             
             return jsonify({
@@ -1373,7 +1397,7 @@ def request_password_reset():
         cursor.close()
         return_db_connection(conn)
         
-        # Send OTP via email with reset instructions
+        # Send OTP via email with reset instructions (non-blocking)
         send_password_reset_email(email, otp, username)
         
         return jsonify({
@@ -1445,68 +1469,6 @@ def verify_reset_otp():
     except Exception as e:
         conn.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
-
-def send_password_reset_email(email, otp, username):
-    """Send password reset OTP via email"""
-    if not MAIL_USERNAME or not MAIL_PASSWORD:
-        print(f"⚠ Email not configured. Password reset OTP for {email}: {otp}")
-        return True
-    
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = MAIL_FROM
-        msg['To'] = email
-        msg['Subject'] = 'Password Reset - Invoice Parser Portal'
-
-        html_body = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }}
-                .container {{ max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-                .header {{ text-align: center; border-bottom: 2px solid #1b5e20; padding-bottom: 20px; }}
-                .header h1 {{ color: #1b5e20; margin: 0; }}
-                .otp-code {{ font-size: 32px; font-weight: bold; color: #1b5e20; text-align: center; padding: 20px; background: #e8f5e9; border-radius: 8px; margin: 20px 0; letter-spacing: 8px; }}
-                .footer {{ text-align: center; color: #999; font-size: 12px; margin-top: 20px; }}
-                .expiry {{ color: #666; font-size: 14px; text-align: center; }}
-                .warning {{ background: #fff3cd; padding: 12px; border-radius: 8px; margin: 16px 0; color: #856404; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>🔑 Password Reset</h1>
-                </div>
-                <p>Hello <strong>{username}</strong>,</p>
-                <p>We received a request to reset your password. Use the OTP below to set a new password:</p>
-                <div class="otp-code">{otp}</div>
-                <p class="expiry">This OTP expires in <strong>{OTP_EXPIRY_MINUTES} minutes</strong></p>
-                <div class="warning">
-                    ⚠️ If you didn't request this, please ignore this email and your password will remain unchanged.
-                </div>
-                <div class="footer">
-                    <p>Invoice & Shipment Bill Parser Portal</p>
-                    <p>This is an automated message, please do not reply.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-
-        msg.attach(MIMEText(html_body, 'html'))
-
-        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT)
-        if MAIL_USE_TLS:
-            server.starttls()
-        server.login(MAIL_USERNAME, MAIL_PASSWORD)
-        server.send_message(msg)
-        server.quit()
-        
-        return True
-    except Exception as e:
-        print(f"✗ Email send error: {e}")
-        return False
 
 # ============================================================================
 # DATABASE INITIALIZATION ON STARTUP (FOR PRODUCTION)
