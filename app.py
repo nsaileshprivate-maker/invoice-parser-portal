@@ -1305,23 +1305,15 @@ def export_combined():
         return_db_connection(conn)
         
         # Create mapping: invoice_number -> shipment data
-        # Also track shipment S.No for each invoice
         shipment_map = {}
-        shipment_counter = 1
         for ship in shipment_rows:
             inv_num = ship.get('invoice_number', '')
             if inv_num:
                 if inv_num not in shipment_map:
                     shipment_map[inv_num] = {
                         'shipBillNo': ship['ship_bill_no'],
-                        'shipBillingDate': ship['ship_billing_date'],
-                        'shipSNo': shipment_counter
+                        'shipBillingDate': ship['ship_billing_date']
                     }
-                    shipment_counter += 1
-                else:
-                    # If multiple shipments for same invoice, add as new shipment
-                    # We'll keep the first one and show S.No
-                    pass
         
         # Create workbook
         wb = Workbook()
@@ -1330,10 +1322,10 @@ def export_combined():
         
         current_row = 1
         
-        # ===== HEADER ROW =====
+        # ===== HEADER ROW - NO SHIP S.NO =====
         headers = ['S.No', 'Invoice Number', 'Invoice Date', 'Terms of Payment', 
-                   'Terms of Delivery', 'Currency', 'Amount', '',
-                   'Ship S.No', 'Ship Bill No', 'Ship Billing Date']
+                   'Terms of Delivery', 'Currency', 'Amount',
+                   'Ship Bill No', 'Ship Billing Date']
         
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col)
@@ -1365,8 +1357,6 @@ def export_combined():
                 invoice['terms_of_delivery'] or '',
                 invoice['currency'] or '',
                 invoice['amount'] or '',
-                '',  # Blank column
-                ship_data.get('shipSNo', ''),   # Shipment S.No
                 ship_data.get('shipBillNo', ''),
                 ship_data.get('shipBillingDate', '')
             ]
@@ -1415,7 +1405,7 @@ def export_combined():
     
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
-    
+        
 # ============================================================================
 # ERROR HANDLERS
 # ============================================================================
