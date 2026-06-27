@@ -379,7 +379,9 @@ def extract_invoice_data(pdf_path):
         with pdfplumber.open(pdf_path) as pdf:
             full_text = ""
             for page in pdf.pages:
-                full_text += page.extract_text() + "\n"
+                text = page.extract_text()
+                if text:
+                    full_text += text + "\n"
 
             result = {
                 'invoiceNumber': '',
@@ -458,64 +460,120 @@ def extract_shipment_data(pdf_path):
         with pdfplumber.open(pdf_path) as pdf:
             full_text = ""
             for page in pdf.pages:
-                full_text += page.extract_text() + "\n"
+                text = page.extract_text()
+                if text:
+                    full_text += text + "\n"
+            
+            # Print first 1000 chars for debugging
+            print("🔍 ===== SHIPPING BILL TEXT (first 1000 chars) =====")
+            print(full_text[:1000])
+            print("🔍 =================================================")
             
             result = {
                 'shipBillNo': '',
                 'shipBillingDate': '',
-                'invoiceNumber': ''  # NEW: Extract Invoice Number from shipping bill
+                'invoiceNumber': ''
             }
             
-            # Extract Ship Bill No (7-digit number)
-            match = re.search(r'SB No[:\s]*(\d{7})', full_text, re.IGNORECASE)
-            if match:
-                result['shipBillNo'] = match.group(1).strip()
-            
-            # If first pattern fails, try alternative
-            if not result['shipBillNo']:
-                match = re.search(r'SB\s*No[.\s:]*(\d{7})', full_text, re.IGNORECASE)
-                if match:
-                    result['shipBillNo'] = match.group(1).strip()
-            
-            # If still not found, try any 7-digit number at top of page
-            if not result['shipBillNo']:
-                match = re.search(r'\b(\d{7})\b', full_text[:500])
-                if match:
-                    result['shipBillNo'] = match.group(1).strip()
-            
-            # Extract Ship Bill Date (DD-MMM-YY format)
-            match = re.search(r'SB Date[:\s]*(\d{1,2})\s*-?\s*([A-Z]{3})\s*-?\s*(\d{2,4})', full_text, re.IGNORECASE)
-            if match:
-                day, month_str, year = match.groups()
-                month_map = {
-                    'JAN': '01', 'FEB': '02', 'MAR': '03', 'APR': '04',
-                    'MAY': '05', 'JUN': '06', 'JUL': '07', 'AUG': '08',
-                    'SEP': '09', 'OCT': '10', 'NOV': '11', 'DEC': '12'
-                }
-                month = month_map.get(month_str.upper(), '')
-                year_int = int(year)
-                if year_int < 100:
-                    year_int = 2000 + year_int if year_int < 50 else 1900 + year_int
-                result['shipBillingDate'] = f"{int(day):02d}-{month}-{year_int}"
-            
-            # NEW: Extract Invoice Number from shipping bill
-            # Look for INV NO or Invoice No in the document
-            patterns = [
-                r'INV\s*NO[.\s:]*(\d+)',
-                r'Invoice\s*No[.\s:]*(\d+)',
-                r'INV\.?\s*No[.\s:]*(\d+)',
-                r'INV\s*NO\s*(\d+)',
-                r'Invoice\s*Number[.\s:]*(\d+)'
+            # ===== Extract Ship Bill No (7-digit number) =====
+            sb_patterns = [
+                r'SB\s*No[.:\s]*(\d{7})',
+                r'SB\s*NO[.:\s]*(\d{7})',
+                r'Shipping\s*Bill\s*No[.:\s]*(\d{7})',
+                r'SB\s*Number[.:\s]*(\d{7})',
+                r'SB\s*NO\s*(\d{7})',
+                r'Port Code.*?(\d{7})',
+                r'\b(\d{7})\b',
             ]
-            for pattern in patterns:
+            for pattern in sb_patterns:
+                match = re.search(pattern, full_text[:500], re.IGNORECASE)
+                if match:
+                    potential_sb = match.group(1).strip()
+                    # Make sure it's a valid 7-digit number
+                    if len(potential_sb) == 7 and potential_sb.isdigit():
+                        result['shipBillNo'] = potential_sb
+                        print(f"🔍 Found Ship Bill No: {result['shipBillNo']}")
+                        break
+            
+            # ===== Extract Ship Bill Date =====
+            date_patterns = [
+                r'SB\s*Date[.:\s]*(\d{1,2})\s*[-/]?\s*([A-Z]{3})\s*[-/]?\s*(\d{2,4})',
+                r'SB\s*DATE[.:\s]*(\d{1,2})\s*[-/]?\s*([A-Z]{3})\s*[-/]?\s*(\d{2,4})',
+                r'Shipping\s*Bill\s*Date[.:\s]*(\d{1,2})\s*[-/]?\s*([A-Z]{3})\s*[-/]?\s*(\d{2,4})',
+                r'(\d{1,2})\s*[-/]?\s*([A-Z]{3})\s*[-/]?\s*(\d{2,4})',
+            ]
+            for pattern in date_patterns:
                 match = re.search(pattern, full_text, re.IGNORECASE)
                 if match:
-                    result['invoiceNumber'] = match.group(1).strip()
-                    break
+                    day, month_str, year = match.groups()
+                    month_map = {
+                        'JAN': '01', 'FEB': '02', 'MAR': '03', 'APR': '04',
+                        'MAY': '05', 'JUN': '06', 'JUL': '07', 'AUG': '08',
+                        'SEP': '09', 'OCT': '10', 'NOV': '11', 'DEC': '12'
+                    }
+                    month = month_map.get(month_str.upper(), '')
+                    if month:
+                        year_int = int(year)
+                        if year_int < 100:
+                            year_int = 2000 + year_int if year_int < 50 else 1900 + year_int
+                        result['shipBillingDate'] = f"{int(day):02d}-{month}-{year_int}"
+                        print(f"🔍 Found Ship Bill Date: {result['shipBillingDate']}")
+                        break
             
+            # ===== Extract Invoice Number (10-digit number starting with 25) =====
+            print("🔍 Searching for Invoice Number...")
+            
+            # Look for INV NO pattern
+            inv_patterns = [
+                r'INV\s*NO[.:\s]*(\d{10})',
+                r'INV\s*NO[.:\s]*(\d{9,12})',
+                r'INVOICE\s*NO[.:\s]*(\d{10})',
+                r'INV\.?\s*NO[.:\s]*(\d{10})',
+                r'INV\s*NO\s*[:]?\s*(\d{10})',
+                r'Invoice\s*Number[.:\s]*(\d{10})',
+                r'INV\s*NO\s*(\d{10})',
+                r'INV\s*NO\s*\|\s*(\d{10})',
+                r'INV\s*NO\s*(\d{10})',
+                r'INV\s*NO:\s*(\d{10})',
+                r'INV\s*NO\s+(\d{10})',
+                r'Invoice\s+No\s+(\d{10})',
+                r'INV\s*NO\s*=\s*(\d{10})',
+            ]
+            
+            for pattern in inv_patterns:
+                match = re.search(pattern, full_text, re.IGNORECASE)
+                if match:
+                    potential_inv = match.group(1).strip()
+                    if len(potential_inv) >= 9 and potential_inv.isdigit():
+                        result['invoiceNumber'] = potential_inv
+                        print(f"🔍 Found Invoice Number from pattern: {result['invoiceNumber']}")
+                        break
+            
+            # If still not found, look for 10-digit number starting with 25
+            if not result['invoiceNumber']:
+                # Find all 10-digit numbers
+                all_numbers = re.findall(r'\b(\d{10})\b', full_text)
+                for num in all_numbers:
+                    if num.startswith('25'):
+                        result['invoiceNumber'] = num
+                        print(f"🔍 Found Invoice Number (10-digit starting with 25): {result['invoiceNumber']}")
+                        break
+            
+            # If still not found, look for any 10-digit number
+            if not result['invoiceNumber']:
+                # Look for INV or Invoice near a number
+                inv_section = re.search(r'INV[OI]CE?\s*.*?(\d{10})', full_text, re.IGNORECASE)
+                if inv_section:
+                    result['invoiceNumber'] = inv_section.group(1)
+                    print(f"🔍 Found Invoice Number from INV section: {result['invoiceNumber']}")
+            
+            print(f"🔍 Final Result: {result}")
             return result
     
     except Exception as e:
+        print(f"✗ Error extracting shipment data: {e}")
+        import traceback
+        traceback.print_exc()
         return {'error': f'PDF parsing error: {str(e)}'}
 
 # ============================================================================
