@@ -1,0 +1,1693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice & Shipment Bill Parser Portal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #fafafa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        /* ============== LAYOUT ============== */
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ============== SIDEBAR ============== */
+        .sidebar {
+            width: 250px;
+            background-color: #1b5e20;
+            color: white;
+            padding: 40px 20px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 40px;
+            letter-spacing: 0.5px;
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .nav-button {
+            display: block;
+            width: 100%;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            background-color: transparent;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            text-align: left;
+        }
+
+        .nav-button:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-color: white;
+        }
+
+        .nav-button.active {
+            background-color: white;
+            color: #1b5e20;
+            border-color: white;
+        }
+
+        /* ============== MAIN CONTENT ============== */
+        .main-content {
+            margin-left: 250px;
+            flex: 1;
+            padding: 40px;
+            background-color: #fafafa;
+        }
+
+        /* ============== USER BAR ============== */
+        .user-bar {
+            background-color: #1b5e20;
+            color: white;
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .user-bar .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-bar .user-info .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .user-bar .user-info .username {
+            font-weight: 600;
+        }
+
+        .user-bar .user-info .email {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .btn-logout {
+            background: rgba(255,255,255,0.15);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-logout:hover {
+            background: rgba(255,255,255,0.25);
+            border-color: white;
+        }
+
+        .session-loading {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .session-loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e0e0e0;
+            border-top: 4px solid #1b5e20;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .page-header {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1b5e20;
+            margin-bottom: 30px;
+            letter-spacing: -0.5px;
+        }
+
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ============== ROWS ============== */
+        .rows-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .data-row {
+            background-color: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 24px;
+            transition: all 0.3s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .data-row:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-color: #1b5e20;
+        }
+
+        .row-content {
+            display: grid;
+            gap: 20px;
+        }
+
+        .row-content.invoice {
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        }
+
+        .row-content.shipment {
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .form-input {
+            padding: 10px 12px;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.3s ease;
+            background-color: #f8f8f8;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #1b5e20;
+            background-color: white;
+            box-shadow: 0 0 0 3px rgba(27, 94, 32, 0.1);
+        }
+
+        .form-input[readonly] {
+            cursor: not-allowed;
+            background-color: #f5f5f5;
+            color: #666;
+        }
+
+        /* ============== FILE INPUT WITH DRAG-DROP ============== */
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+            border: 2px dashed #1b5e20;
+            border-radius: 4px;
+            background-color: #f0f7f0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-height: 80px;
+            text-align: center;
+            flex-direction: column;
+        }
+
+        .file-input-label:hover {
+            background-color: #e8f5e9;
+            border-color: #0d3a1a;
+        }
+
+        .file-input-label.dragover {
+            background-color: #c8e6c9;
+            border-color: #1b5e20;
+            border-style: solid;
+        }
+
+        .file-input-label.has-file {
+            border-color: #4caf50;
+            background-color: #e8f5e9;
+        }
+
+        .file-input-label span {
+            font-size: 13px;
+            color: #1b5e20;
+            font-weight: 600;
+        }
+
+        .file-input-label.has-file span {
+            color: #2e7d32;
+        }
+
+        .file-input-hint {
+            font-size: 11px;
+            color: #999;
+            margin-top: 6px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-name {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        /* ============== BUTTONS ============== */
+        .button-group {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background-color: #1b5e20;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #0d3a1a;
+            box-shadow: 0 4px 12px rgba(27, 94, 32, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        .btn-secondary {
+            background-color: #e0e0e0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background-color: #d0d0d0;
+        }
+
+        .btn-export {
+            background-color: #1976d2;
+            color: white;
+            font-size: 13px;
+        }
+
+        .btn-export:hover {
+            background-color: #1565c0;
+        }
+
+        /* ============== ADD ROW BUTTON ============== */
+        .add-row-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .btn-add-row {
+            background-color: #1b5e20;
+            color: white;
+            padding: 12px 24px;
+            font-size: 14px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-add-row:hover {
+            background-color: #0d3a1a;
+            box-shadow: 0 4px 12px rgba(27, 94, 32, 0.3);
+        }
+
+        .btn-add-row::before {
+            content: '+';
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        /* ============== LOADING & MESSAGES ============== */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #1b5e20;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 4px;
+            font-size: 13px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .message.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.success {
+            background-color: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            color: #2e7d32;
+        }
+
+        .message.error {
+            background-color: #ffebee;
+            border-left: 4px solid #f44336;
+            color: #c62828;
+        }
+
+        .message.info {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            color: #1565c0;
+        }
+
+        /* ============== TOP ACTION BAR ============== */
+        .action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            background-color: white;
+            padding: 16px 20px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .action-bar-left {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* ============== BUNDLE SECTIONS ============== */
+        .bundle-upload-section {
+            background-color: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 24px;
+            margin-bottom: 30px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .bundle-upload-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1b5e20;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .bundle-file-list {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .bundle-file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            font-size: 12px;
+        }
+
+        .bundle-file-status {
+            color: #2e7d32;
+            font-weight: 600;
+        }
+
+        .bundle-file-status.error {
+            color: #c62828;
+        }
+
+        .btn-submit-bundle {
+            background-color: #1b5e20;
+            color: white;
+            padding: 12px 24px;
+            font-size: 14px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            transition: all 0.3s ease;
+            margin-top: 16px;
+        }
+
+        .btn-submit-bundle:hover {
+            background-color: #0d3a1a;
+            box-shadow: 0 4px 12px rgba(27, 94, 32, 0.3);
+        }
+
+        /* ============== RESPONSIVE ============== */
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 200px;
+                padding: 30px 15px;
+            }
+
+            .main-content {
+                margin-left: 200px;
+                padding: 30px;
+            }
+
+            .row-content.invoice {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+                padding: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+
+            .sidebar-title {
+                margin-bottom: 0;
+                border-bottom: none;
+                font-size: 18px;
+            }
+
+            .nav-buttons {
+                display: flex;
+                gap: 10px;
+                flex-wrap: wrap;
+            }
+
+            .nav-button {
+                margin-bottom: 0;
+                padding: 10px 14px;
+                font-size: 12px;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+
+            .page-header {
+                font-size: 22px;
+                margin-bottom: 20px;
+            }
+
+            .row-content.invoice {
+                grid-template-columns: 1fr;
+            }
+
+            .row-content.shipment {
+                grid-template-columns: 1fr;
+            }
+
+            .data-row {
+                padding: 16px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .action-bar {
+                flex-direction: column;
+                gap: 10px;
+                align-items: stretch;
+            }
+
+            .action-bar-left {
+                flex-direction: column;
+            }
+
+            .user-bar {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .sidebar {
+                padding: 15px;
+            }
+
+            .sidebar-title {
+                font-size: 16px;
+            }
+
+            .nav-button {
+                padding: 8px 12px;
+                font-size: 11px;
+            }
+
+            .main-content {
+                padding: 15px;
+            }
+
+            .page-header {
+                font-size: 18px;
+            }
+
+            .data-row {
+                padding: 12px;
+            }
+
+            .form-input {
+                font-size: 12px;
+                padding: 8px 10px;
+            }
+
+            .form-label {
+                font-size: 11px;
+            }
+
+            .btn {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+        }
+
+        /* ============== EMPTY STATE ============== */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .empty-state-text {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Session Check Loading -->
+    <div id="sessionCheck" style="display: none;">
+        <div class="session-loading">
+            <div class="spinner"></div>
+            <p>Checking session...</p>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div class="container" style="display: none;">
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <div class="sidebar-title">Parser Portal</div>
+            <div class="nav-buttons">
+                <button class="nav-button active" data-page="invoice">📄 Invoice Parser</button>
+                <button class="nav-button" data-page="shipment">🚚 Shipment Parser</button>
+                <button class="nav-button" data-page="bundle-invoice">📦 Bundle Invoice</button>
+                <button class="nav-button" data-page="bundle-shipment">📦 Bundle Shipment</button>
+            </div>
+        </div>
+
+        <!-- MAIN CONTENT -->
+        <div class="main-content">
+            <!-- USER BAR -->
+            <div id="userBar" style="display: none;">
+                <div class="user-bar">
+                    <div class="user-info">
+                        <div class="avatar" id="userAvatar">U</div>
+                        <div>
+                            <div class="username" id="userName">User</div>
+                            <div class="email" id="userEmail">user@example.com</div>
+                        </div>
+                    </div>
+                    <button class="btn-logout" onclick="handleLogout()">🚪 Logout</button>
+                </div>
+            </div>
+
+            <!-- INVOICE PARSER PAGE -->
+            <div class="page active" id="invoice-page">
+                <h1 class="page-header">Invoice Parser</h1>
+
+                <div class="action-bar">
+                    <div class="action-bar-left">
+                        <button class="btn btn-export" onclick="exportCombined()">📊 Export All Data</button>
+                    </div>
+                </div>
+
+                <div id="invoice-message" class="message"></div>
+                <div class="rows-container" id="invoice-rows"></div>
+
+                <div class="add-row-section">
+                    <button class="btn-add-row" onclick="addInvoiceRow()">Add Row</button>
+                </div>
+            </div>
+
+            <!-- SHIPMENT PARSER PAGE -->
+            <div class="page" id="shipment-page">
+                <h1 class="page-header">Shipment Bill Parser</h1>
+
+                <div class="action-bar">
+                    <div class="action-bar-left">
+                        <button class="btn btn-export" onclick="exportCombined()">📊 Export All Data</button>
+                    </div>
+                </div>
+
+                <div id="shipment-message" class="message"></div>
+                <div class="rows-container" id="shipment-rows"></div>
+
+                <div class="add-row-section">
+                    <button class="btn-add-row" onclick="addShipmentRow()">Add Row</button>
+                </div>
+            </div>
+
+            <!-- BUNDLE INVOICE PARSER PAGE -->
+            <div class="page" id="bundle-invoice-page">
+                <h1 class="page-header">Bundle Invoice Parser</h1>
+
+                <div class="action-bar">
+                    <div class="action-bar-left">
+                        <button class="btn btn-export" onclick="exportCombined()">📊 Export All Data</button>
+                    </div>
+                </div>
+
+                <div id="bundle-invoice-message" class="message"></div>
+
+                <div class="bundle-upload-section">
+                    <div class="bundle-upload-title">Upload Multiple Invoice PDFs</div>
+                    <div class="file-input-wrapper">
+                        <label for="bundle-invoice-files" class="file-input-label" id="bundle-invoice-label">
+                            <span>📁 Choose PDFs or Drag & Drop</span>
+                            <div class="file-input-hint">Click to browse or drag multiple files here (up to 100 files)</div>
+                        </label>
+                        <input type="file" id="bundle-invoice-files" accept=".pdf" multiple onchange="handleBundleInvoiceUpload(event)">
+                    </div>
+
+                    <div class="bundle-file-list" id="bundle-invoice-file-list" style="display: none;">
+                        <div style="font-size: 12px; font-weight: 600; margin-bottom: 10px;">Files to Process:</div>
+                        <div id="bundle-invoice-files-display"></div>
+                        <button class="btn-submit-bundle" onclick="submitBundleInvoices()">✓ Process & Save All</button>
+                    </div>
+                </div>
+
+                <div class="rows-container" id="bundle-invoice-rows"></div>
+            </div>
+
+            <!-- BUNDLE SHIPMENT PARSER PAGE -->
+            <div class="page" id="bundle-shipment-page">
+                <h1 class="page-header">Bundle Shipment Bill Parser</h1>
+
+                <div class="action-bar">
+                    <div class="action-bar-left">
+                        <button class="btn btn-export" onclick="exportCombined()">📊 Export All Data</button>
+                    </div>
+                </div>
+
+                <div id="bundle-shipment-message" class="message"></div>
+
+                <div class="bundle-upload-section">
+                    <div class="bundle-upload-title">Upload Multiple Shipment Bill PDFs</div>
+                    <div class="file-input-wrapper">
+                        <label for="bundle-shipment-files" class="file-input-label" id="bundle-shipment-label">
+                            <span>📁 Choose PDFs or Drag & Drop</span>
+                            <div class="file-input-hint">Click to browse or drag multiple files here (up to 100 files)</div>
+                        </label>
+                        <input type="file" id="bundle-shipment-files" accept=".pdf" multiple onchange="handleBundleShipmentUpload(event)">
+                    </div>
+
+                    <div class="bundle-file-list" id="bundle-shipment-file-list" style="display: none;">
+                        <div style="font-size: 12px; font-weight: 600; margin-bottom: 10px;">Files to Process:</div>
+                        <div id="bundle-shipment-files-display"></div>
+                        <button class="btn-submit-bundle" onclick="submitBundleShipments()">✓ Process & Save All</button>
+                    </div>
+                </div>
+
+                <div class="rows-container" id="bundle-shipment-rows"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================================
+        // SESSION MANAGEMENT
+        // ============================================================================
+
+        async function checkSession() {
+            try {
+                const response = await fetch('/api/check-auth');
+                const data = await response.json();
+                
+                if (data.authenticated) {
+                    document.getElementById('sessionCheck').style.display = 'none';
+                    document.getElementById('userBar').style.display = 'block';
+                    document.getElementById('userName').textContent = data.user.username;
+                    document.getElementById('userEmail').textContent = data.user.email;
+                    document.getElementById('userAvatar').textContent = data.user.username.charAt(0).toUpperCase();
+                    
+                    document.querySelector('.container').style.display = 'flex';
+                    initializeApp();
+                    resetInactivityTimer();
+                } else {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Session check failed:', error);
+                window.location.href = '/login';
+            }
+        }
+
+        async function handleLogout() {
+            if (!confirm('Are you sure you want to logout?')) return;
+            
+            try {
+                const response = await fetch('/api/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.status === 'success') {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Logout failed:', error);
+            }
+        }
+
+        let inactivityTimer;
+
+        function resetInactivityTimer() {
+            clearTimeout(inactivityTimer);
+            inactivityTimer = setTimeout(() => {
+                fetch('/api/check-auth')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.authenticated) {
+                            if (confirm('Your session will expire soon due to inactivity. Click OK to stay logged in.')) {
+                                resetInactivityTimer();
+                            } else {
+                                handleLogout();
+                            }
+                        }
+                    })
+                    .catch(() => {});
+            }, 25 * 60 * 1000);
+        }
+
+        document.addEventListener('click', resetInactivityTimer);
+        document.addEventListener('keypress', resetInactivityTimer);
+        document.addEventListener('mousemove', resetInactivityTimer);
+        document.addEventListener('scroll', resetInactivityTimer);
+
+        // ============================================================================
+        // GLOBAL STATE
+        // ============================================================================
+
+        const state = {
+            currentPage: 'invoice',
+            invoiceRows: [],
+            shipmentRows: [],
+            bundleInvoiceData: [],
+            bundleShipmentData: []
+        };
+
+        // ============================================================================
+        // INITIALIZATION
+        // ============================================================================
+
+        function initializeApp() {
+            setupNavigation();
+            setupBundleDragDrop();
+            addInvoiceRow();
+            addShipmentRow();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelector('.container').style.display = 'none';
+            document.getElementById('sessionCheck').style.display = 'block';
+            checkSession();
+        });
+
+        // ============================================================================
+        // NAVIGATION
+        // ============================================================================
+
+        function setupNavigation() {
+            document.querySelectorAll('.nav-button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const page = e.target.closest('.nav-button').dataset.page;
+                    switchPage(page);
+                });
+            });
+        }
+
+        function switchPage(page) {
+            state.currentPage = page;
+
+            document.querySelectorAll('.nav-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-page="${page}"]`).classList.add('active');
+
+            document.querySelectorAll('.page').forEach(p => {
+                p.classList.remove('active');
+            });
+            document.getElementById(`${page}-page`).classList.add('active');
+        }
+
+        // ============================================================================
+        // BUNDLE DRAG-DROP SETUP
+        // ============================================================================
+
+        function setupBundleDragDrop() {
+            setupBundleDropZone('bundle-invoice-files', 'bundle-invoice-label');
+            setupBundleDropZone('bundle-shipment-files', 'bundle-shipment-label');
+        }
+
+        function setupBundleDropZone(fileInputId, labelId) {
+            const fileInput = document.getElementById(fileInputId);
+            const label = document.getElementById(labelId);
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                label.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                label.addEventListener(eventName, () => {
+                    label.classList.add('dragover');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                label.addEventListener(eventName, () => {
+                    label.classList.remove('dragover');
+                }, false);
+            });
+
+            label.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                fileInput.files = files;
+                
+                if (fileInputId.includes('invoice')) {
+                    handleBundleInvoiceUpload({ target: fileInput });
+                } else {
+                    handleBundleShipmentUpload({ target: fileInput });
+                }
+            }, false);
+        }
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // ============================================================================
+        // BUNDLE INVOICE FUNCTIONS
+        // ============================================================================
+
+        function handleBundleInvoiceUpload(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            state.bundleInvoiceData = [];
+            const fileList = document.getElementById('bundle-invoice-files-display');
+            fileList.innerHTML = '';
+
+            const label = document.getElementById('bundle-invoice-label');
+            label.innerHTML = '<div class="loading"></div>Processing files...';
+
+            const formData = new FormData();
+            for (let file of files) {
+                formData.append('files', file);
+            }
+
+            fetch('/extract-invoice-bundle', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    state.bundleInvoiceData = data.data;
+                    displayBundleInvoiceFiles(data.data);
+                    showMessage('bundle-invoice', `✓ ${data.count} invoices extracted`, 'success');
+                } else {
+                    showMessage('bundle-invoice', `✗ Error: ${data.message}`, 'error');
+                }
+                label.innerHTML = '<span>📁 Choose PDFs or Drag & Drop</span><div class="file-input-hint">Click to browse or drag multiple files here (up to 100 files)</div>';
+            })
+            .catch(error => {
+                showMessage('bundle-invoice', `✗ Error: ${error.message}`, 'error');
+                label.innerHTML = '<span>📁 Choose PDFs or Drag & Drop</span><div class="file-input-hint">Click to browse or drag multiple files here (up to 100 files)</div>';
+            });
+        }
+
+        function displayBundleInvoiceFiles(data) {
+            const fileList = document.getElementById('bundle-invoice-files-display');
+            const container = document.getElementById('bundle-invoice-file-list');
+            fileList.innerHTML = '';
+
+            data.forEach((item, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'bundle-file-item';
+                fileItem.innerHTML = `
+                    <span>${index + 1}. ${item.fileName}</span>
+                    <span class="bundle-file-status">✓ Extracted</span>
+                `;
+                fileList.appendChild(fileItem);
+            });
+
+            container.style.display = 'block';
+            renderBundleInvoiceRows(data);
+        }
+
+        function renderBundleInvoiceRows(data) {
+            const container = document.getElementById('bundle-invoice-rows');
+            container.innerHTML = '';
+
+            data.forEach((item, index) => {
+                const rowElement = document.createElement('div');
+                rowElement.className = 'data-row';
+                rowElement.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="color: #1b5e20; font-size: 14px;">File ${index + 1}: ${item.fileName}</h3>
+                    </div>
+                    <div class="row-content invoice">
+                        <div class="form-group">
+                            <label class="form-label">Invoice Number</label>
+                            <input type="text" class="form-input" value="${item.invoiceNumber || ''}" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Invoice Date (DD-MM-YYYY)</label>
+                            <input type="text" class="form-input" value="${item.invoiceDate || ''}" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Terms of Payment</label>
+                            <input type="text" class="form-input" value="${item.termsOfPayment || ''}" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Terms of Delivery</label>
+                            <input type="text" class="form-input" value="${item.termsOfDelivery || ''}" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Currency</label>
+                            <input type="text" class="form-input" value="${item.currency || ''}" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Amount</label>
+                            <input type="text" class="form-input" value="${item.amount || ''}" readonly>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(rowElement);
+            });
+        }
+
+        function submitBundleInvoices() {
+            if (state.bundleInvoiceData.length === 0) {
+                showMessage('bundle-invoice', '✗ No data to submit', 'error');
+                return;
+            }
+
+            let submitted = 0;
+            let failed = 0;
+
+            state.bundleInvoiceData.forEach(item => {
+                fetch('/submit-invoice', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        invoiceNumber: item.invoiceNumber,
+                        invoiceDate: item.invoiceDate,
+                        termsOfPayment: item.termsOfPayment,
+                        termsOfDelivery: item.termsOfDelivery,
+                        currency: item.currency,
+                        amount: item.amount
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        submitted++;
+                    } else {
+                        failed++;
+                    }
+
+                    if (submitted + failed === state.bundleInvoiceData.length) {
+                        showMessage('bundle-invoice', `✓ ${submitted} submitted, ${failed} failed`, 'success');
+                        state.bundleInvoiceData = [];
+                        document.getElementById('bundle-invoice-files').value = '';
+                        document.getElementById('bundle-invoice-file-list').style.display = 'none';
+                        document.getElementById('bundle-invoice-rows').innerHTML = '';
+                    }
+                })
+                .catch(error => {
+                    failed++;
+                    if (submitted + failed === state.bundleInvoiceData.length) {
+                        showMessage('bundle-invoice', `✓ ${submitted} submitted, ${failed} failed`, 'success');
+                    }
+                });
+            });
+        }
+
+        // ============================================================================
+        // BUNDLE SHIPMENT FUNCTIONS
+        // ============================================================================
+
+        function handleBundleShipmentUpload(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            state.bundleShipmentData = [];
+            const fileList = document.getElementById('bundle-shipment-files-display');
+            fileList.innerHTML = '';
+
+            const label = document.getElementById('bundle-shipment-label');
+            label.innerHTML = '<div class="loading"></div>Processing files...';
+
+            const formData = new FormData();
+            for (let file of files) {
+                formData.append('files', file);
+            }
+
+            fetch('/extract-shipment-bundle', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    state.bundleShipmentData = data.data;
+                    displayBundleShipmentFiles(data.data);
+                    showMessage('bundle-shipment', `✓ ${data.count} shipments extracted`, 'success');
+                } else {
+                    showMessage('bundle-shipment', `✗ Error: ${data.message}`, 'error');
+                }
+                label.innerHTML = '<span>📁 Choose PDFs or Drag & Drop</span><div class="file-input-hint">Click to browse or drag multiple files here (up to 100 files)</div>';
+            })
+            .catch(error => {
+                showMessage('bundle-shipment', `✗ Error: ${error.message}`, 'error');
+                label.innerHTML = '<span>📁 Choose PDFs or Drag & Drop</span><div class="file-input-hint">Click to browse or drag multiple files here (up to 100 files)</div>';
+            });
+        }
+
+        function displayBundleShipmentFiles(data) {
+            const fileList = document.getElementById('bundle-shipment-files-display');
+            const container = document.getElementById('bundle-shipment-file-list');
+            fileList.innerHTML = '';
+
+            data.forEach((item, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'bundle-file-item';
+                fileItem.innerHTML = `
+                    <span>${index + 1}. ${item.fileName}</span>
+                    <span class="bundle-file-status">✓ Extracted</span>
+                `;
+                fileList.appendChild(fileItem);
+            });
+
+            container.style.display = 'block';
+            renderBundleShipmentRows(data);
+        }
+
+        function renderBundleShipmentRows(data) {
+            const container = document.getElementById('bundle-shipment-rows');
+            container.innerHTML = '';
+
+            data.forEach((item, index) => {
+                const rowElement = document.createElement('div');
+                rowElement.className = 'data-row';
+                rowElement.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="color: #1b5e20; font-size: 14px;">File ${index + 1}: ${item.fileName}</h3>
+                    </div>
+                    <div class="row-content shipment">
+                        <div class="form-group">
+                            <label class="form-label">Ship Bill No</label>
+                            <input type="text" class="form-input" value="${item.shipBillNo || ''}" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Ship Billing Date (DD-MM-YYYY)</label>
+                            <input type="text" class="form-input" value="${item.shipBillingDate || ''}" readonly>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(rowElement);
+            });
+        }
+
+        function submitBundleShipments() {
+            if (state.bundleShipmentData.length === 0) {
+                showMessage('bundle-shipment', '✗ No data to submit', 'error');
+                return;
+            }
+
+            let submitted = 0;
+            let failed = 0;
+
+            state.bundleShipmentData.forEach(item => {
+                fetch('/submit-shipment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        shipBillNo: item.shipBillNo,
+                        shipBillingDate: item.shipBillingDate
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        submitted++;
+                    } else {
+                        failed++;
+                    }
+
+                    if (submitted + failed === state.bundleShipmentData.length) {
+                        showMessage('bundle-shipment', `✓ ${submitted} submitted, ${failed} failed`, 'success');
+                        state.bundleShipmentData = [];
+                        document.getElementById('bundle-shipment-files').value = '';
+                        document.getElementById('bundle-shipment-file-list').style.display = 'none';
+                        document.getElementById('bundle-shipment-rows').innerHTML = '';
+                    }
+                })
+                .catch(error => {
+                    failed++;
+                    if (submitted + failed === state.bundleShipmentData.length) {
+                        showMessage('bundle-shipment', `✓ ${submitted} submitted, ${failed} failed`, 'success');
+                    }
+                });
+            });
+        }
+
+        // ============================================================================
+        // INVOICE FUNCTIONS
+        // ============================================================================
+
+        function addInvoiceRow() {
+            const rowId = 'invoice-' + Date.now();
+            const row = {
+                id: rowId,
+                data: {
+                    invoiceNumber: '',
+                    invoiceDate: '',
+                    termsOfPayment: '',
+                    termsOfDelivery: '',
+                    currency: '',
+                    amount: ''
+                }
+            };
+
+            state.invoiceRows.push(row);
+            renderInvoiceRow(row);
+        }
+
+        function renderInvoiceRow(row) {
+            const container = document.getElementById('invoice-rows');
+            const rowElement = document.createElement('div');
+            rowElement.className = 'data-row';
+            rowElement.id = row.id;
+
+            rowElement.innerHTML = `
+                <div class="row-content invoice">
+                    <div class="form-group">
+                        <label class="form-label">Upload Invoice PDF</label>
+                        <div class="file-input-wrapper">
+                            <label for="invoice-file-${row.id}" class="file-input-label" data-file-label="${row.id}">
+                                <span>📁 Choose PDF or Drag & Drop</span>
+                                <div class="file-input-hint">Click to browse or drag files here</div>
+                            </label>
+                            <input type="file" id="invoice-file-${row.id}" accept=".pdf" data-file-input="${row.id}" onchange="handleInvoiceUpload(event, '${row.id}')">
+                            <div class="file-name" data-file-name="${row.id}"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Invoice Number</label>
+                        <input type="text" class="form-input" data-field="invoiceNumber" data-row="${row.id}" value="${row.data.invoiceNumber}" readonly placeholder="Auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Invoice Date (DD-MM-YYYY)</label>
+                        <input type="text" class="form-input" data-field="invoiceDate" data-row="${row.id}" value="${row.data.invoiceDate}" readonly placeholder="Auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Terms of Payment</label>
+                        <input type="text" class="form-input" data-field="termsOfPayment" data-row="${row.id}" value="${row.data.termsOfPayment}" placeholder="Auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Terms of Delivery</label>
+                        <input type="text" class="form-input" data-field="termsOfDelivery" data-row="${row.id}" value="${row.data.termsOfDelivery}" placeholder="Auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Currency</label>
+                        <input type="text" class="form-input" data-field="currency" data-row="${row.id}" value="${row.data.currency}" placeholder="Auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Amount</label>
+                        <input type="text" class="form-input" data-field="amount" data-row="${row.id}" value="${row.data.amount}" placeholder="Auto-filled">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;">
+                    <button class="btn btn-primary" onclick="submitInvoiceRow('${row.id}')">✓ Submit</button>
+                    <button class="btn btn-secondary" onclick="removeInvoiceRow('${row.id}')">🗑 Delete</button>
+                </div>
+            `;
+
+            container.appendChild(rowElement);
+            setupDragDrop(`invoice-file-${row.id}`, 'invoice', row.id);
+
+            rowElement.querySelectorAll('[data-field]').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const fieldName = e.target.dataset.field;
+                    row.data[fieldName] = e.target.value;
+                });
+            });
+        }
+
+        function setupDragDrop(fileInputId, type, rowId) {
+            const fileInput = document.getElementById(fileInputId);
+            const label = fileInput.previousElementSibling;
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                label.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                label.addEventListener(eventName, () => {
+                    label.classList.add('dragover');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                label.addEventListener(eventName, () => {
+                    label.classList.remove('dragover');
+                }, false);
+            });
+
+            label.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                fileInput.files = files;
+                handleInvoiceUpload({ target: fileInput }, rowId);
+            }, false);
+        }
+
+        function handleInvoiceUpload(event, rowId) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.type !== 'application/pdf') {
+                showMessage('invoice', '✗ Only PDF files are allowed', 'error');
+                return;
+            }
+
+            const fileLabel = document.querySelector(`[data-file-label="${rowId}"]`);
+            const fileName = document.querySelector(`[data-file-name="${rowId}"]`);
+            fileLabel.classList.add('has-file');
+            fileName.textContent = `📄 ${file.name}`;
+
+            const loadingSpan = document.createElement('span');
+            loadingSpan.innerHTML = '<div class="loading"></div>Extracting...';
+            fileLabel.innerHTML = '';
+            fileLabel.appendChild(loadingSpan);
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/extract-invoice', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const row = state.invoiceRows.find(r => r.id === rowId);
+                    if (row) {
+                        row.data = { ...row.data, ...data.data };
+                        updateInvoiceRowFields(rowId, data.data);
+                    }
+                    showMessage('invoice', `✓ Invoice data extracted successfully`, 'success');
+                } else {
+                    showMessage('invoice', `✗ Error: ${data.message}`, 'error');
+                }
+                fileLabel.classList.remove('has-file');
+                fileLabel.innerHTML = '<span>📁 Choose PDF or Drag & Drop</span><div class="file-input-hint">Click to browse or drag files here</div>';
+            })
+            .catch(error => {
+                showMessage('invoice', `✗ Error: ${error.message}`, 'error');
+                fileLabel.classList.remove('has-file');
+                fileLabel.innerHTML = '<span>📁 Choose PDF or Drag & Drop</span><div class="file-input-hint">Click to browse or drag files here</div>';
+            });
+        }
+
+        function updateInvoiceRowFields(rowId, data) {
+            const row = document.getElementById(rowId);
+            if (!row) return;
+
+            Object.keys(data).forEach(field => {
+                const input = row.querySelector(`[data-field="${field}"]`);
+                if (input) {
+                    input.value = data[field];
+                    if (field !== 'invoiceNumber' && field !== 'invoiceDate') {
+                        input.removeAttribute('readonly');
+                    }
+                }
+            });
+        }
+
+        function submitInvoiceRow(rowId) {
+            const row = state.invoiceRows.find(r => r.id === rowId);
+            if (!row) return;
+
+            if (!row.data.invoiceNumber || !row.data.invoiceDate) {
+                showMessage('invoice', '✗ Invoice Number and Date are required', 'error');
+                return;
+            }
+
+            fetch('/submit-invoice', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(row.data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showMessage('invoice', `✓ Invoice submitted successfully (ID: ${data.id})`, 'success');
+                    setTimeout(() => {
+                        removeInvoiceRow(rowId);
+                    }, 1500);
+                } else {
+                    showMessage('invoice', `✗ Error: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('invoice', `✗ Error: ${error.message}`, 'error');
+            });
+        }
+
+        function removeInvoiceRow(rowId) {
+            document.getElementById(rowId)?.remove();
+            state.invoiceRows = state.invoiceRows.filter(r => r.id !== rowId);
+        }
+
+        // ============================================================================
+        // SHIPMENT FUNCTIONS
+        // ============================================================================
+
+        function addShipmentRow() {
+            const rowId = 'shipment-' + Date.now();
+            const row = {
+                id: rowId,
+                data: {
+                    shipBillNo: '',
+                    shipBillingDate: ''
+                }
+            };
+
+            state.shipmentRows.push(row);
+            renderShipmentRow(row);
+        }
+
+        function renderShipmentRow(row) {
+            const container = document.getElementById('shipment-rows');
+            const rowElement = document.createElement('div');
+            rowElement.className = 'data-row';
+            rowElement.id = row.id;
+
+            rowElement.innerHTML = `
+                <div class="row-content shipment">
+                    <div class="form-group">
+                        <label class="form-label">Upload Shipping Bill PDF</label>
+                        <div class="file-input-wrapper">
+                            <label for="shipping-file-${row.id}" class="file-input-label" data-file-label="${row.id}">
+                                <span>📁 Choose PDF or Drag & Drop</span>
+                                <div class="file-input-hint">Click to browse or drag files here</div>
+                            </label>
+                            <input type="file" id="shipping-file-${row.id}" accept=".pdf" data-file-input="${row.id}" onchange="handleShipmentUpload(event, '${row.id}')">
+                            <div class="file-name" data-file-name="${row.id}"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ship Bill No</label>
+                        <input type="text" class="form-input" data-field="shipBillNo" data-row="${row.id}" value="${row.data.shipBillNo}" readonly placeholder="Auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ship Billing Date (DD-MM-YYYY)</label>
+                        <input type="text" class="form-input" data-field="shipBillingDate" data-row="${row.id}" value="${row.data.shipBillingDate}" readonly placeholder="Auto-filled">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;">
+                    <button class="btn btn-primary" onclick="submitShipmentRow('${row.id}')">✓ Submit</button>
+                    <button class="btn btn-secondary" onclick="removeShipmentRow('${row.id}')">🗑 Delete</button>
+                </div>
+            `;
+
+            container.appendChild(rowElement);
+            setupDragDrop(`shipping-file-${row.id}`, 'shipment', row.id);
+
+            rowElement.querySelectorAll('[data-field]').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const fieldName = e.target.dataset.field;
+                    row.data[fieldName] = e.target.value;
+                });
+            });
+        }
+
+        function handleShipmentUpload(event, rowId) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.type !== 'application/pdf') {
+                showMessage('shipment', '✗ Only PDF files are allowed', 'error');
+                return;
+            }
+
+            const fileLabel = document.querySelector(`[data-file-label="${rowId}"]`);
+            const fileName = document.querySelector(`[data-file-name="${rowId}"]`);
+            fileLabel.classList.add('has-file');
+            fileName.textContent = `📄 ${file.name}`;
+
+            const loadingSpan = document.createElement('span');
+            loadingSpan.innerHTML = '<div class="loading"></div>Extracting...';
+            fileLabel.innerHTML = '';
+            fileLabel.appendChild(loadingSpan);
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/extract-shipment', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const row = state.shipmentRows.find(r => r.id === rowId);
+                    if (row) {
+                        row.data = { ...row.data, ...data.data };
+                        updateShipmentRowFields(rowId, data.data);
+                    }
+                    showMessage('shipment', `✓ Shipment data extracted successfully`, 'success');
+                } else {
+                    showMessage('shipment', `✗ Error: ${data.message}`, 'error');
+                }
+                fileLabel.classList.remove('has-file');
+                fileLabel.innerHTML = '<span>📁 Choose PDF or Drag & Drop</span><div class="file-input-hint">Click to browse or drag files here</div>';
+            })
+            .catch(error => {
+                showMessage('shipment', `✗ Error: ${error.message}`, 'error');
+                fileLabel.classList.remove('has-file');
+                fileLabel.innerHTML = '<span>📁 Choose PDF or Drag & Drop</span><div class="file-input-hint">Click to browse or drag files here</div>';
+            });
+        }
+
+        function updateShipmentRowFields(rowId, data) {
+            const row = document.getElementById(rowId);
+            if (!row) return;
+
+            Object.keys(data).forEach(field => {
+                const input = row.querySelector(`[data-field="${field}"]`);
+                if (input) {
+                    input.value = data[field];
+                }
+            });
+        }
+
+        function submitShipmentRow(rowId) {
+            const row = state.shipmentRows.find(r => r.id === rowId);
+            if (!row) return;
+
+            if (!row.data.shipBillNo || !row.data.shipBillingDate) {
+                showMessage('shipment', '✗ Ship Bill No and Date are required', 'error');
+                return;
+            }
+
+            fetch('/submit-shipment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(row.data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showMessage('shipment', `✓ Shipment submitted successfully (ID: ${data.id})`, 'success');
+                    setTimeout(() => {
+                        removeShipmentRow(rowId);
+                    }, 1500);
+                } else {
+                    showMessage('shipment', `✗ Error: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('shipment', `✗ Error: ${error.message}`, 'error');
+            });
+        }
+
+        function removeShipmentRow(rowId) {
+            document.getElementById(rowId)?.remove();
+            state.shipmentRows = state.shipmentRows.filter(r => r.id !== rowId);
+        }
+
+        // ============================================================================
+        // EXPORT FUNCTION
+        // ============================================================================
+
+        function exportCombined() {
+            window.location.href = '/export-combined';
+        }
+
+        // ============================================================================
+        // MESSAGE DISPLAY
+        // ============================================================================
+
+        function showMessage(pageType, message, type = 'info') {
+            const messageEl = document.getElementById(`${pageType}-message`);
+            if (!messageEl) return;
+
+            messageEl.textContent = message;
+            messageEl.className = `message show ${type}`;
+
+            setTimeout(() => {
+                messageEl.classList.remove('show');
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

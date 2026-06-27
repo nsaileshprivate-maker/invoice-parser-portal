@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Invoice & Shipment Bill Parser Portal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 50%, #1b5e20 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .register-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 48px 40px;
+            width: 100%;
+            max-width: 440px;
+            animation: slideUp 0.5s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .register-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .register-header .icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .register-header h1 {
+            color: #1b5e20;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .register-header p {
+            color: #666;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #1b5e20;
+            box-shadow: 0 0 0 3px rgba(27, 94, 32, 0.1);
+        }
+
+        .form-group input.error {
+            border-color: #f44336;
+        }
+
+        .form-group input.success {
+            border-color: #4caf50;
+        }
+
+        .password-hint {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .btn-register {
+            width: 100%;
+            padding: 14px;
+            background: #1b5e20;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 8px;
+        }
+
+        .btn-register:hover {
+            background: #0d3a1a;
+            box-shadow: 0 4px 16px rgba(27, 94, 32, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn-register:active {
+            transform: translateY(0);
+        }
+
+        .btn-register:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .message.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            color: #c62828;
+        }
+
+        .message.success {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            color: #2e7d32;
+        }
+
+        .message.info {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            color: #1565c0;
+        }
+
+        .register-footer {
+            text-align: center;
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .register-footer a {
+            color: #1b5e20;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .register-footer a:hover {
+            text-decoration: underline;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1b5e20;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .password-strength {
+            height: 4px;
+            border-radius: 2px;
+            margin-top: 6px;
+            transition: all 0.3s ease;
+            background: #e0e0e0;
+        }
+
+        .password-strength.weak { background: #f44336; width: 33%; }
+        .password-strength.medium { background: #ff9800; width: 66%; }
+        .password-strength.strong { background: #4caf50; width: 100%; }
+
+        /* Field feedback messages */
+        .field-feedback {
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .field-feedback.error {
+            color: #f44336;
+        }
+
+        .field-feedback.success {
+            color: #4caf50;
+        }
+
+        @media (max-width: 480px) {
+            .register-container {
+                padding: 32px 20px;
+            }
+
+            .register-header h1 {
+                font-size: 20px;
+            }
+
+            .form-group input {
+                padding: 10px 14px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="register-header">
+            <div class="icon">📝</div>
+            <h1>Create Account</h1>
+            <p>Start using the Invoice & Shipment Parser Portal</p>
+        </div>
+
+        <div id="message" class="message"></div>
+
+        <form id="registerForm" onsubmit="handleRegister(event)">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input 
+                    type="text" 
+                    id="username" 
+                    placeholder="Choose a username (min 3 characters)"
+                    required
+                    autofocus
+                    minlength="3"
+                >
+                <div id="username-feedback" class="field-feedback"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    placeholder="Enter your email address"
+                    required
+                >
+                <div id="email-feedback" class="field-feedback"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    placeholder="Create a password (min 6 characters)"
+                    required
+                    minlength="6"
+                    oninput="checkPasswordStrength(this.value)"
+                >
+                <div class="password-strength" id="passwordStrength"></div>
+                <div class="password-hint">Minimum 6 characters</div>
+                <div id="password-feedback" class="field-feedback"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="confirmPassword">Confirm Password</label>
+                <input 
+                    type="password" 
+                    id="confirmPassword" 
+                    placeholder="Confirm your password"
+                    required
+                >
+                <div id="confirmPassword-feedback" class="field-feedback"></div>
+            </div>
+
+            <button type="submit" class="btn-register" id="registerBtn">
+                Create Account
+            </button>
+        </form>
+
+        <div class="register-footer">
+            Already have an account? <a href="/login">Sign In</a>
+        </div>
+    </div>
+
+    <script>
+        // Check if already logged in
+        fetch('/api/check-auth')
+            .then(response => response.json())
+            .then(data => {
+                if (data.authenticated) {
+                    window.location.href = '/';
+                }
+            })
+            .catch(() => {});
+
+        // ============================================================================
+        // MESSAGE FUNCTIONS
+        // ============================================================================
+
+        function showMessage(message, type = 'error') {
+            const msgEl = document.getElementById('message');
+            msgEl.textContent = message;
+            msgEl.className = `message show ${type}`;
+        }
+
+        function hideMessage() {
+            const msgEl = document.getElementById('message');
+            msgEl.className = 'message';
+        }
+
+        function showFieldFeedback(fieldId, message, type = 'error') {
+            const feedbackEl = document.getElementById(`${fieldId}-feedback`);
+            if (feedbackEl) {
+                feedbackEl.textContent = message;
+                feedbackEl.className = `field-feedback ${type}`;
+            }
+            const input = document.getElementById(fieldId);
+            if (input) {
+                input.classList.remove('error', 'success');
+                input.classList.add(type === 'error' ? 'error' : 'success');
+            }
+        }
+
+        function clearFieldFeedback(fieldId) {
+            const feedbackEl = document.getElementById(`${fieldId}-feedback`);
+            if (feedbackEl) {
+                feedbackEl.textContent = '';
+                feedbackEl.className = 'field-feedback';
+            }
+            const input = document.getElementById(fieldId);
+            if (input) {
+                input.classList.remove('error', 'success');
+            }
+        }
+
+        function clearAllFeedback() {
+            ['username', 'email', 'password', 'confirmPassword'].forEach(id => {
+                clearFieldFeedback(id);
+            });
+        }
+
+        // ============================================================================
+        // PASSWORD STRENGTH CHECKER
+        // ============================================================================
+
+        function checkPasswordStrength(password) {
+            const strengthEl = document.getElementById('passwordStrength');
+            const feedbackEl = document.getElementById('password-feedback');
+            
+            if (password.length === 0) {
+                strengthEl.className = 'password-strength';
+                feedbackEl.textContent = '';
+                feedbackEl.className = 'field-feedback';
+                return;
+            }
+            
+            let strength = 0;
+            if (password.length >= 6) strength++;
+            if (password.length >= 10) strength++;
+            if (/[A-Z]/.test(password) && /[a-z]/.test(password)) strength++;
+            if (/\d/.test(password)) strength++;
+            if (/[^A-Za-z0-9]/.test(password)) strength++;
+            
+            let strengthText = '';
+            let strengthClass = '';
+            
+            if (strength <= 1) {
+                strengthClass = 'weak';
+                strengthText = 'Weak';
+            } else if (strength <= 3) {
+                strengthClass = 'medium';
+                strengthText = 'Medium';
+            } else {
+                strengthClass = 'strong';
+                strengthText = 'Strong ✓';
+            }
+            
+            strengthEl.className = `password-strength ${strengthClass}`;
+            
+            if (password.length >= 6) {
+                feedbackEl.textContent = `Strength: ${strengthText}`;
+                feedbackEl.className = `field-feedback ${strengthClass === 'weak' ? 'error' : 'success'}`;
+            } else {
+                feedbackEl.textContent = 'Password must be at least 6 characters';
+                feedbackEl.className = 'field-feedback error';
+            }
+        }
+
+        // ============================================================================
+        // REAL-TIME VALIDATION
+        // ============================================================================
+
+        let usernameTimeout = null;
+        let emailTimeout = null;
+
+        // Username real-time check
+        document.getElementById('username').addEventListener('input', function() {
+            const username = this.value.trim();
+            clearFieldFeedback('username');
+            
+            if (username.length === 0) {
+                return;
+            }
+            
+            if (username.length < 3) {
+                showFieldFeedback('username', 'Username must be at least 3 characters', 'error');
+                return;
+            }
+            
+            if (usernameTimeout) clearTimeout(usernameTimeout);
+            
+            usernameTimeout = setTimeout(() => {
+                fetch('/api/check-username', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username: username })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showFieldFeedback('username', '✓ Username available', 'success');
+                    } else {
+                        showFieldFeedback('username', '✗ ' + data.message, 'error');
+                    }
+                })
+                .catch(() => {
+                    // Silent fail
+                });
+            }, 500);
+        });
+
+        // Email real-time check
+        document.getElementById('email').addEventListener('input', function() {
+            const email = this.value.trim();
+            clearFieldFeedback('email');
+            
+            if (email.length === 0) {
+                return;
+            }
+            
+            if (!email.includes('@') || !email.includes('.')) {
+                showFieldFeedback('email', 'Please enter a valid email address', 'error');
+                return;
+            }
+            
+            if (emailTimeout) clearTimeout(emailTimeout);
+            
+            emailTimeout = setTimeout(() => {
+                fetch('/api/check-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email: email })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showFieldFeedback('email', '✓ Email available', 'success');
+                    } else {
+                        showFieldFeedback('email', '✗ ' + data.message, 'error');
+                    }
+                })
+                .catch(() => {
+                    // Silent fail
+                });
+            }, 500);
+        });
+
+        // Password match validation
+        document.getElementById('confirmPassword').addEventListener('input', function() {
+            const password = document.getElementById('password').value;
+            const confirm = this.value;
+            clearFieldFeedback('confirmPassword');
+            
+            if (confirm.length === 0) return;
+            
+            if (password !== confirm) {
+                showFieldFeedback('confirmPassword', '✗ Passwords do not match', 'error');
+            } else {
+                showFieldFeedback('confirmPassword', '✓ Passwords match', 'success');
+            }
+        });
+
+        // Clear feedback on focus
+        document.querySelectorAll('.form-group input').forEach(input => {
+            input.addEventListener('focus', function() {
+                clearFieldFeedback(this.id);
+                hideMessage();
+            });
+        });
+
+        // ============================================================================
+        // REGISTRATION HANDLER
+        // ============================================================================
+
+        async function handleRegister(event) {
+            event.preventDefault();
+            hideMessage();
+            clearAllFeedback();
+
+            const username = document.getElementById('username').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const registerBtn = document.getElementById('registerBtn');
+
+            let hasError = false;
+
+            // Validate Username
+            if (!username || username.length < 3) {
+                showFieldFeedback('username', 'Username must be at least 3 characters', 'error');
+                hasError = true;
+            }
+
+            // Validate Email
+            if (!email || !email.includes('@') || !email.includes('.')) {
+                showFieldFeedback('email', 'Please enter a valid email address', 'error');
+                hasError = true;
+            }
+
+            // Validate Password
+            if (password.length < 6) {
+                showFieldFeedback('password', 'Password must be at least 6 characters', 'error');
+                hasError = true;
+            }
+
+            // Validate Password Match
+            if (password !== confirmPassword) {
+                showFieldFeedback('confirmPassword', 'Passwords do not match', 'error');
+                hasError = true;
+            }
+
+            if (hasError) {
+                showMessage('Please fix all errors before continuing', 'error');
+                return;
+            }
+
+            registerBtn.disabled = true;
+            registerBtn.innerHTML = '<span class="loading-spinner"></span> Sending OTP...';
+
+            try {
+                const response = await fetch('/api/send-otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        email: email, 
+                        username: username 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    sessionStorage.setItem('register_email', email);
+                    sessionStorage.setItem('register_username', username);
+                    sessionStorage.setItem('register_password', password);
+                    
+                    showMessage('✓ OTP sent to your email! Redirecting to verification...', 'success');
+                    
+                    setTimeout(() => {
+                        window.location.href = `/verify-otp?email=${encodeURIComponent(email)}`;
+                    }, 1000);
+                } else {
+                    showMessage(data.message || 'Failed to send OTP', 'error');
+                    registerBtn.disabled = false;
+                    registerBtn.innerHTML = 'Create Account';
+                }
+            } catch (error) {
+                showMessage('Network error. Please try again.', 'error');
+                registerBtn.disabled = false;
+                registerBtn.innerHTML = 'Create Account';
+            }
+        }
+    </script>
+</body>
+</html>
