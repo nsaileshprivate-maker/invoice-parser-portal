@@ -5,6 +5,7 @@ import secrets
 import random
 import string
 import threading
+import requests
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, send_file, session, redirect, url_for, render_template
@@ -207,30 +208,25 @@ def generate_otp():
     """Generate a 6-digit OTP"""
     return ''.join(random.choices(string.digits, k=OTP_LENGTH))
 
+
 def send_otp_email_async(email, otp, username):
-    """Send OTP via email in background thread with debug logging"""
+    """Send OTP via SendGrid Web API"""
     
-    # Debug: Print all email settings
-    print(f"🔍 ===== EMAIL DEBUG INFO =====")
-    print(f"🔍 MAIL_SERVER: {MAIL_SERVER}")
-    print(f"🔍 MAIL_PORT: {MAIL_PORT}")
-    print(f"🔍 MAIL_USE_TLS: {MAIL_USE_TLS}")
-    print(f"🔍 MAIL_USERNAME: {MAIL_USERNAME}")
-    print(f"🔍 MAIL_PASSWORD: {'SET' if MAIL_PASSWORD else 'NOT SET'}")
-    print(f"🔍 MAIL_FROM: {MAIL_FROM}")
-    print(f"🔍 =============================")
+    print(f"🔍 ===== SENDGRID WEB API =====")
+    print(f"🔍 Sending to: {email}")
+    print(f"🔍 OTP: {otp}")
+    print(f"🔍 ============================")
     
-    if not MAIL_USERNAME or not MAIL_PASSWORD:
-        print(f"⚠ Email not configured. OTP for {email}: {otp}")
+    if not MAIL_PASSWORD:
+        print(f"⚠ SendGrid API key not configured. OTP for {email}: {otp}")
         return True
     
     try:
-        msg = MIMEMultipart()
-        msg['From'] = MAIL_FROM
-        msg['To'] = email
-        msg['Subject'] = 'Verify Your Email - Invoice Parser Portal'
-
-        html_body = f"""
+        # SendGrid Web API URL
+        url = "https://api.sendgrid.com/v3/mail/send"
+        
+        # Email content
+        html_content = f"""
         <!DOCTYPE html>
         <html>
         <head>
@@ -252,7 +248,7 @@ def send_otp_email_async(email, otp, username):
                 <p>Hello <strong>{username}</strong>,</p>
                 <p>Thank you for registering! Please verify your email address by entering the OTP below:</p>
                 <div class="otp-code">{otp}</div>
-                <p class="expiry">This OTP expires in <strong>{OTP_EXPIRY_MINUTES} minutes</strong></p>
+                <p class="expiry">This OTP expires in <strong>10 minutes</strong></p>
                 <p>If you didn't request this, please ignore this email.</p>
                 <div class="footer">
                     <p>Invoice & Shipment Bill Parser Portal</p>
@@ -262,40 +258,48 @@ def send_otp_email_async(email, otp, username):
         </body>
         </html>
         """
-
-        msg.attach(MIMEText(html_body, 'html'))
-
-        print(f"🔍 Attempting to connect to {MAIL_SERVER}:{MAIL_PORT}...")
         
-        # For port 465 (SSL)
-        if MAIL_PORT == 465:
-            print(f"🔍 Using SSL connection (port 465)")
-            context = ssl.create_default_context()
-            server = smtplib.SMTP_SSL(MAIL_SERVER, MAIL_PORT, context=context)
+        # Email data
+        data = {
+            "personalizations": [
+                {
+                    "to": [{"email": email}],
+                    "subject": "Verify Your Email - Invoice Parser Portal"
+                }
+            ],
+            "from": {"email": MAIL_FROM or MAIL_USERNAME},
+            "content": [
+                {
+                    "type": "text/html",
+                    "value": html_content
+                }
+            ]
+        }
+        
+        # Headers
+        headers = {
+            "Authorization": f"Bearer {MAIL_PASSWORD}",
+            "Content-Type": "application/json"
+        }
+        
+        print(f"🔍 Sending request to SendGrid API...")
+        
+        response = requests.post(url, json=data, headers=headers, timeout=30)
+        
+        if response.status_code == 202:
+            print(f"✓ Email sent successfully to {email}")
+            return True
         else:
-            # For port 587 (TLS)
-            print(f"🔍 Using TLS connection (port 587)")
-            server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT)
-            if MAIL_USE_TLS:
-                server.starttls()
-        
-        print(f"🔍 Logging in as {MAIL_USERNAME}...")
-        server.login(MAIL_USERNAME, MAIL_PASSWORD)
-        
-        print(f"🔍 Sending email to {email}...")
-        server.send_message(msg)
-        server.quit()
-        
-        print(f"✓ Email sent successfully to {email}")
-        return True
-        
+            print(f"✗ SendGrid API error: {response.status_code} - {response.text}")
+            return False
+            
+    except requests.exceptions.Timeout:
+        print(f"✗ SendGrid API timeout")
+        return False
     except Exception as e:
         print(f"✗ Email send error: {str(e)}")
-        print(f"✗ Error type: {type(e).__name__}")
-        import traceback
-        traceback.print_exc()
         return False
-
+    
 def send_otp_email(email, otp, username):
     """Send OTP via email (non-blocking)"""
     # Always print OTP to console (for Railway logs)
