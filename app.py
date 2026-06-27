@@ -263,7 +263,9 @@ def send_otp_email(email, otp, username):
         return True
     except Exception as e:
         print(f"✗ Email send error: {e}")
-        return False# ============================================================================
+        return False
+
+# ============================================================================
 # HELPER FUNCTIONS - PDF EXTRACTION
 # ============================================================================
 
@@ -463,7 +465,22 @@ def verify_otp_page():
     email = request.args.get('email')
     if not email:
         return redirect('/register')
-    return send_file('verify_otp.html', mimetype='text/html')# ============================================================================
+    return send_file('verify_otp.html', mimetype='text/html')
+
+@app.route('/forgot-password')
+def forgot_password_page():
+    """Serve forgot password page"""
+    return send_file('forgot_password.html', mimetype='text/html')
+
+@app.route('/reset-password')
+def reset_password_page():
+    """Serve reset password page"""
+    email = request.args.get('email')
+    if not email:
+        return redirect('/forgot-password')
+    return send_file('reset_password.html', mimetype='text/html')
+
+# ============================================================================
 # AUTHENTICATION API ROUTES
 # ============================================================================
 
@@ -473,9 +490,13 @@ def send_otp():
     try:
         data = request.get_json()
         email = data.get('email', '').strip()
+        username = data.get('username', '').strip()
         
         if not email:
             return jsonify({'status': 'error', 'message': 'Email is required'}), 400
+        
+        if not username or len(username) < 3:
+            return jsonify({'status': 'error', 'message': 'Username must be at least 3 characters'}), 400
         
         # Check if email is already registered and verified
         conn = get_db_connection()
@@ -517,7 +538,6 @@ def send_otp():
             conn.commit()
             
             # Send OTP via email
-            username = data.get('username', 'User')
             send_otp_email(email, otp, username)
             
             return jsonify({
@@ -778,7 +798,9 @@ def current_user():
                 'email': user['email']
             }
         })
-    return jsonify({'status': 'error', 'message': 'User not found'}), 404# ============================================================================
+    return jsonify({'status': 'error', 'message': 'User not found'}), 404
+
+# ============================================================================
 # INVOICE ENDPOINTS
 # ============================================================================
 
@@ -1309,19 +1331,6 @@ def check_email():
 # FORGOT PASSWORD ROUTES
 # ============================================================================
 
-@app.route('/forgot-password')
-def forgot_password_page():
-    """Serve forgot password page"""
-    return send_file('forgot_password.html', mimetype='text/html')
-
-@app.route('/reset-password')
-def reset_password_page():
-    """Serve reset password page"""
-    email = request.args.get('email')
-    if not email:
-        return redirect('/forgot-password')
-    return send_file('reset_password.html', mimetype='text/html')
-
 @app.route('/api/request-password-reset', methods=['POST'])
 def request_password_reset():
     """Send OTP for password reset"""
@@ -1499,14 +1508,22 @@ def send_password_reset_email(email, otp, username):
         print(f"✗ Email send error: {e}")
         return False
 
+# ============================================================================
+# DATABASE INITIALIZATION ON STARTUP (FOR PRODUCTION)
+# ============================================================================
+
+# This runs when Gunicorn starts the app on Railway
+with app.app_context():
+    try:
+        init_db()
+        print("✓ Database initialized successfully on startup")
+    except Exception as e:
+        print(f"✗ Database initialization failed: {e}")
 
 # ============================================================================
 # MAIN ENTRY POINT
 # ============================================================================
 
 if __name__ == '__main__':
-    # Initialize database
-    init_db()
-    
-    # Run the application
+    # This runs when you run python app.py locally
     app.run(debug=True, host='0.0.0.0', port=5000)
