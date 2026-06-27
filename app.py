@@ -14,7 +14,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 import pdfplumber
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 import io
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -1186,7 +1186,7 @@ def get_shipments():
 @app.route('/export-combined', methods=['GET'])
 @login_required
 def export_combined():
-    """Export all invoices AND shipments HORIZONTALLY (side-by-side)"""
+    """Export all invoices AND shipments horizontally with borders"""
     try:
         user_id = get_user_id()
         
@@ -1223,21 +1223,28 @@ def export_combined():
         current_row = 1
         
         # ===== HEADER ROW =====
+        # Invoice headers (7 columns) + Blank column + Shipment headers (2 columns)
         headers = ['S.No', 'Invoice Number', 'Invoice Date', 'Terms of Payment', 
-                   'Terms of Delivery', 'Currency', 'Amount',
+                   'Terms of Delivery', 'Currency', 'Amount', '',  # Blank column
                    'Ship Bill No', 'Ship Billing Date']
         
-        # Add headers
+        # Add headers with styling
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col)
             cell.value = header
             cell.fill = PatternFill(start_color="1b5e20", end_color="1b5e20", fill_type="solid")
             cell.font = Font(bold=True, color="FFFFFF")
             cell.alignment = Alignment(horizontal="center", vertical="center")
+            # Add border to header
+            cell.border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
         current_row += 1
         
         # ===== DATA ROWS =====
-        # Combine invoice and shipment data (match by index)
         max_rows = max(len(invoice_rows), len(shipment_rows))
         
         for i in range(max_rows):
@@ -1247,6 +1254,7 @@ def export_combined():
             if i < len(invoice_rows):
                 inv = invoice_rows[i]
                 inv_data = [
+                    sno,
                     inv['invoice_number'],
                     inv['invoice_date'],
                     inv['terms_of_payment'] or '',
@@ -1255,7 +1263,7 @@ def export_combined():
                     inv['amount'] or ''
                 ]
             else:
-                inv_data = ['', '', '', '', '', '']
+                inv_data = [sno, '', '', '', '', '', '']
             
             # Get shipment data if available
             if i < len(shipment_rows):
@@ -1267,35 +1275,22 @@ def export_combined():
             else:
                 ship_data = ['', '']
             
-            # Write row
-            row_data = [sno] + inv_data + ship_data
-            for col, value in enumerate(row_data, 1):
-                ws.cell(row=current_row, column=col).value = value
+            # Combine: S.No + Invoice Data + Blank + Shipment Data
+            row_data = inv_data + [''] + ship_data
             
-            current_row += 1
-        
-        # ===== SUMMARY SECTION =====
-        current_row += 2
-        summary_headers = ['Summary', 'Count']
-        
-        for col, header in enumerate(summary_headers, 1):
-            cell = ws.cell(row=current_row, column=col)
-            cell.value = header
-            cell.fill = PatternFill(start_color="2e7d32", end_color="2e7d32", fill_type="solid")
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-        current_row += 1
-        
-        # Summary data
-        summary_data = [
-            ['Total Invoices', len(invoice_rows)],
-            ['Total Shipments', len(shipment_rows)],
-            ['Total Entries', max_rows]
-        ]
-        
-        for row_data in summary_data:
+            # Write row with borders
             for col, value in enumerate(row_data, 1):
-                ws.cell(row=current_row, column=col).value = value
+                cell = ws.cell(row=current_row, column=col)
+                cell.value = value
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                # Add border to all cells
+                cell.border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+            
             current_row += 1
         
         # ===== AUTO-SIZE COLUMNS =====
@@ -1329,7 +1324,7 @@ def export_combined():
     
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
-    
+
 # ============================================================================
 # ERROR HANDLERS
 # ============================================================================
