@@ -1242,6 +1242,10 @@
                             <label class="form-label">Ship Billing Date (DD-MM-YYYY)</label>
                             <input type="text" class="form-input" value="${item.shipBillingDate || ''}" readonly>
                         </div>
+                        <div class="form-group">
+                            <label class="form-label">Invoice Number (Matched)</label>
+                            <input type="text" class="form-input" value="${item.invoiceNumber || ''}" readonly style="background-color: #e8f5e9; font-weight: bold;">
+                        </div>
                     </div>
                 `;
                 container.appendChild(rowElement);
@@ -1265,7 +1269,8 @@
                     },
                     body: JSON.stringify({
                         shipBillNo: item.shipBillNo,
-                        shipBillingDate: item.shipBillingDate
+                        shipBillingDate: item.shipBillingDate,
+                        invoiceNumber: item.invoiceNumber || ''
                     })
                 })
                 .then(response => response.json())
@@ -1506,7 +1511,7 @@
         }
 
         // ============================================================================
-        // SHIPMENT FUNCTIONS
+        // SHIPMENT FUNCTIONS - UPDATED WITH INVOICE NUMBER
         // ============================================================================
 
         function addShipmentRow() {
@@ -1515,7 +1520,8 @@
                 id: rowId,
                 data: {
                     shipBillNo: '',
-                    shipBillingDate: ''
+                    shipBillingDate: '',
+                    invoiceNumber: ''  // NEW: Invoice Number from shipping bill
                 }
             };
 
@@ -1549,6 +1555,10 @@
                     <div class="form-group">
                         <label class="form-label">Ship Billing Date (DD-MM-YYYY)</label>
                         <input type="text" class="form-input" data-field="shipBillingDate" data-row="${row.id}" value="${row.data.shipBillingDate}" readonly placeholder="Auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Invoice Number (from shipping bill)</label>
+                        <input type="text" class="form-input" data-field="invoiceNumber" data-row="${row.id}" value="${row.data.invoiceNumber}" readonly placeholder="Auto-filled" style="background-color: #e8f5e9; font-weight: bold;">
                     </div>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;">
@@ -1637,12 +1647,19 @@
                 return;
             }
 
+            // Prepare data with invoice number
+            const submitData = {
+                shipBillNo: row.data.shipBillNo,
+                shipBillingDate: row.data.shipBillingDate,
+                invoiceNumber: row.data.invoiceNumber || ''  // NEW: Include invoice number
+            };
+
             fetch('/submit-shipment', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(row.data)
+                body: JSON.stringify(submitData)
             })
             .then(response => response.json())
             .then(data => {

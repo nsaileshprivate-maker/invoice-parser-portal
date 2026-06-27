@@ -142,13 +142,14 @@ def init_db():
             )
         ''')
         
-        # Create shipments table
+        # Create shipments table with invoice_number column
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS shipments (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 ship_bill_no TEXT NOT NULL,
                 ship_billing_date TEXT NOT NULL,
+                invoice_number TEXT,
                 submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -158,6 +159,7 @@ def init_db():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_invoices_submitted_at ON invoices(submitted_at)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_shipments_user_id ON shipments(user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_shipments_submitted_at ON shipments(submitted_at)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_shipments_invoice_number ON shipments(invoice_number)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_email_verifications_email ON email_verifications(email)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_email_verifications_otp ON email_verifications(otp)')
         
@@ -451,26 +453,38 @@ def extract_invoice_data(pdf_path):
         return {'error': f'PDF parsing error: {str(e)}'}
 
 def extract_shipment_data(pdf_path):
-    """Extract shipping bill data from PDF"""
+    """Extract shipping bill data from PDF including Invoice Number"""
     try:
         with pdfplumber.open(pdf_path) as pdf:
-            first_page_text = pdf.pages[0].extract_text()
+            full_text = ""
+            for page in pdf.pages:
+                full_text += page.extract_text() + "\n"
             
             result = {
                 'shipBillNo': '',
-                'shipBillingDate': ''
+                'shipBillingDate': '',
+                'invoiceNumber': ''  # NEW: Extract Invoice Number from shipping bill
             }
             
-            # Get only the first 2000 characters (top section with SB info)
-            top_section = first_page_text[:2000] if first_page_text else ""
-            
-            # Extract any 7-digit number (SB No is usually 7 digits)
-            match = re.search(r'\b(\d{7})\b', top_section)
+            # Extract Ship Bill No (7-digit number)
+            match = re.search(r'SB No[:\s]*(\d{7})', full_text, re.IGNORECASE)
             if match:
                 result['shipBillNo'] = match.group(1).strip()
             
-            # Extract date in DD-MMM-YY format
-            match = re.search(r'(\d{1,2})-([A-Z]{3})-(\d{2,4})', top_section, re.IGNORECASE)
+            # If first pattern fails, try alternative
+            if not result['shipBillNo']:
+                match = re.search(r'SB\s*No[.\s:]*(\d{7})', full_text, re.IGNORECASE)
+                if match:
+                    result['shipBillNo'] = match.group(1).strip()
+            
+            # If still not found, try any 7-digit number at top of page
+            if not result['shipBillNo']:
+                match = re.search(r'\b(\d{7})\b', full_text[:500])
+                if match:
+                    result['shipBillNo'] = match.group(1).strip()
+            
+            # Extract Ship Bill Date (DD-MMM-YY format)
+            match = re.search(r'SB Date[:\s]*(\d{1,2})\s*-?\s*([A-Z]{3})\s*-?\s*(\d{2,4})', full_text, re.IGNORECASE)
             if match:
                 day, month_str, year = match.groups()
                 month_map = {
@@ -483,6 +497,21 @@ def extract_shipment_data(pdf_path):
                 if year_int < 100:
                     year_int = 2000 + year_int if year_int < 50 else 1900 + year_int
                 result['shipBillingDate'] = f"{int(day):02d}-{month}-{year_int}"
+            
+            # NEW: Extract Invoice Number from shipping bill
+            # Look for INV NO or Invoice No in the document
+            patterns = [
+                r'INV\s*NO[.\s:]*(\d+)',
+                r'Invoice\s*No[.\s:]*(\d+)',
+                r'INV\.?\s*No[.\s:]*(\d+)',
+                r'INV\s*NO\s*(\d+)',
+                r'Invoice\s*Number[.\s:]*(\d+)'
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, full_text, re.IGNORECASE)
+                if match:
+                    result['invoiceNumber'] = match.group(1).strip()
+                    break
             
             return result
     
@@ -1030,7 +1059,7 @@ def get_invoices():
 @app.route('/extract-shipment', methods=['POST'])
 @login_required
 def extract_shipment():
-    """Extract shipment data from uploaded PDF"""
+    """Extract shipment data from uploaded PDF including Invoice Number"""
     if 'file' not in request.files:
         return jsonify({'status': 'error', 'message': 'No file uploaded'}), 400
     
@@ -1061,7 +1090,7 @@ def extract_shipment():
 @app.route('/extract-shipment-bundle', methods=['POST'])
 @login_required
 def extract_shipment_bundle():
-    """Extract shipment data from MULTIPLE uploaded PDFs"""
+    """Extract shipment data from MULTIPLE uploaded PDFs including Invoice Numbers"""
     if 'files' not in request.files:
         return jsonify({'status': 'error', 'message': 'No files uploaded'}), 400
     
@@ -1103,7 +1132,7 @@ def extract_shipment_bundle():
 @app.route('/submit-shipment', methods=['POST'])
 @login_required
 def submit_shipment():
-    """Store submitted shipment data in database"""
+    """Store submitted shipment data in database with invoice_number"""
     try:
         data = request.get_json()
         user_id = get_user_id()
@@ -1117,12 +1146,13 @@ def submit_shipment():
         try:
             cursor.execute('''
                 INSERT INTO shipments 
-                (user_id, ship_bill_no, ship_billing_date)
-                VALUES (%s, %s, %s) RETURNING id
+                (user_id, ship_bill_no, ship_billing_date, invoice_number)
+                VALUES (%s, %s, %s, %s) RETURNING id
             ''', (
                 user_id,
                 data.get('shipBillNo', ''),
-                data.get('shipBillingDate', '')
+                data.get('shipBillingDate', ''),
+                data.get('invoiceNumber', '')  # NEW: Store the invoice number
             ))
             
             shipment_id = cursor.fetchone()[0]
@@ -1155,7 +1185,7 @@ def get_shipments():
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
         cursor.execute('''
-            SELECT id, ship_bill_no, ship_billing_date, submitted_at 
+            SELECT id, ship_bill_no, ship_billing_date, invoice_number, submitted_at 
             FROM shipments 
             WHERE user_id = %s 
             ORDER BY submitted_at DESC
@@ -1171,6 +1201,7 @@ def get_shipments():
                 'id': row['id'],
                 'shipBillNo': row['ship_bill_no'],
                 'shipBillingDate': row['ship_billing_date'],
+                'invoiceNumber': row.get('invoice_number', ''),
                 'submittedAt': row['submitted_at']
             })
         
@@ -1180,42 +1211,58 @@ def get_shipments():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # ============================================================================
-# EXPORT ENDPOINT
+# EXPORT ENDPOINT - MATCHES INVOICE WITH SHIPMENT BY INVOICE NUMBER
 # ============================================================================
 
 @app.route('/export-combined', methods=['GET'])
 @login_required
 def export_combined():
-    """Export all invoices AND shipments horizontally with borders"""
+    """Export all invoices with matched shipments by invoice number"""
     try:
         user_id = get_user_id()
         
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Get invoices for current user
+        # Get all invoices for current user
         cursor.execute('''
-            SELECT invoice_number, invoice_date, terms_of_payment, 
+            SELECT id, invoice_number, invoice_date, terms_of_payment, 
                    terms_of_delivery, currency, amount 
             FROM invoices 
             WHERE user_id = %s 
-            ORDER BY submitted_at DESC
+            ORDER BY id
         ''', (user_id,))
         invoice_rows = cursor.fetchall()
         
-        # Get shipments for current user
+        # Get all shipments for current user
         cursor.execute('''
-            SELECT ship_bill_no, ship_billing_date 
+            SELECT id, ship_bill_no, ship_billing_date, invoice_number 
             FROM shipments 
             WHERE user_id = %s 
-            ORDER BY submitted_at DESC
+            ORDER BY id
         ''', (user_id,))
         shipment_rows = cursor.fetchall()
         
         cursor.close()
         return_db_connection(conn)
         
-        # Create workbook with ONE sheet
+        # Create mapping: invoice_number -> shipment data
+        shipment_map = {}
+        for ship in shipment_rows:
+            inv_num = ship.get('invoice_number', '')
+            if inv_num:
+                # If multiple shipments for same invoice, keep the first one (or you can keep all)
+                if inv_num not in shipment_map:
+                    shipment_map[inv_num] = {
+                        'shipBillNo': ship['ship_bill_no'],
+                        'shipBillingDate': ship['ship_billing_date']
+                    }
+                else:
+                    # Option: Keep multiple shipments - you can decide how to handle
+                    # For now, we'll keep the first one
+                    pass
+        
+        # Create workbook
         wb = Workbook()
         ws = wb.active
         ws.title = "All Data"
@@ -1223,19 +1270,16 @@ def export_combined():
         current_row = 1
         
         # ===== HEADER ROW =====
-        # Invoice headers (7 columns) + Blank column + Shipment headers (2 columns)
         headers = ['S.No', 'Invoice Number', 'Invoice Date', 'Terms of Payment', 
-                   'Terms of Delivery', 'Currency', 'Amount', '',  # Blank column
+                   'Terms of Delivery', 'Currency', 'Amount', '',
                    'Ship Bill No', 'Ship Billing Date']
         
-        # Add headers with styling
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col)
             cell.value = header
             cell.fill = PatternFill(start_color="1b5e20", end_color="1b5e20", fill_type="solid")
             cell.font = Font(bold=True, color="FFFFFF")
             cell.alignment = Alignment(horizontal="center", vertical="center")
-            # Add border to header
             cell.border = Border(
                 left=Side(style='thin'),
                 right=Side(style='thin'),
@@ -1245,45 +1289,30 @@ def export_combined():
         current_row += 1
         
         # ===== DATA ROWS =====
-        max_rows = max(len(invoice_rows), len(shipment_rows))
-        
-        for i in range(max_rows):
-            sno = i + 1
+        sno = 1
+        for invoice in invoice_rows:
+            inv_num = invoice['invoice_number']
             
-            # Get invoice data if available
-            if i < len(invoice_rows):
-                inv = invoice_rows[i]
-                inv_data = [
-                    sno,
-                    inv['invoice_number'],
-                    inv['invoice_date'],
-                    inv['terms_of_payment'] or '',
-                    inv['terms_of_delivery'] or '',
-                    inv['currency'] or '',
-                    inv['amount'] or ''
-                ]
-            else:
-                inv_data = [sno, '', '', '', '', '', '']
+            # Check if this invoice has a matching shipment
+            ship_data = shipment_map.get(inv_num, {})
             
-            # Get shipment data if available
-            if i < len(shipment_rows):
-                ship = shipment_rows[i]
-                ship_data = [
-                    ship['ship_bill_no'],
-                    ship['ship_billing_date']
-                ]
-            else:
-                ship_data = ['', '']
+            row_data = [
+                sno,
+                inv_num,
+                invoice['invoice_date'],
+                invoice['terms_of_payment'] or '',
+                invoice['terms_of_delivery'] or '',
+                invoice['currency'] or '',
+                invoice['amount'] or '',
+                '',  # Blank column
+                ship_data.get('shipBillNo', ''),
+                ship_data.get('shipBillingDate', '')
+            ]
             
-            # Combine: S.No + Invoice Data + Blank + Shipment Data
-            row_data = inv_data + [''] + ship_data
-            
-            # Write row with borders
             for col, value in enumerate(row_data, 1):
                 cell = ws.cell(row=current_row, column=col)
                 cell.value = value
                 cell.alignment = Alignment(horizontal="center", vertical="center")
-                # Add border to all cells
                 cell.border = Border(
                     left=Side(style='thin'),
                     right=Side(style='thin'),
@@ -1291,9 +1320,10 @@ def export_combined():
                     bottom=Side(style='thin')
                 )
             
+            sno += 1
             current_row += 1
         
-        # ===== AUTO-SIZE COLUMNS =====
+        # Auto-size columns
         for column in ws.columns:
             max_length = 0
             column_letter = column[0].column_letter
@@ -1311,7 +1341,6 @@ def export_combined():
         wb.save(file_stream)
         file_stream.seek(0)
         
-        # Include username in filename
         user = get_current_user()
         username = user['username'] if user else 'user'
         
