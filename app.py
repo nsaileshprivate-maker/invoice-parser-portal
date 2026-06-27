@@ -19,6 +19,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import SimpleConnectionPool
 import smtplib
+import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import logging
@@ -42,8 +43,8 @@ DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://postgres:password@lo
 
 # Email Configuration (for OTP)
 MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
-MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
-MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'True').lower() == 'true'
+MAIL_PORT = int(os.environ.get('MAIL_PORT', 465))
+MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'False').lower() == 'true'
 MAIL_USERNAME = os.environ.get('MAIL_USERNAME', '')
 MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD', '')
 MAIL_FROM = os.environ.get('MAIL_FROM', MAIL_USERNAME)
@@ -199,7 +200,7 @@ def get_user_id():
     return session.get('user_id')
 
 # ============================================================================
-# EMAIL HELPER FUNCTIONS (NON-BLOCKING)
+# EMAIL HELPER FUNCTIONS (NON-BLOCKING WITH DEBUG)
 # ============================================================================
 
 def generate_otp():
@@ -207,7 +208,18 @@ def generate_otp():
     return ''.join(random.choices(string.digits, k=OTP_LENGTH))
 
 def send_otp_email_async(email, otp, username):
-    """Send OTP via email in background thread"""
+    """Send OTP via email in background thread with debug logging"""
+    
+    # Debug: Print all email settings
+    print(f"🔍 ===== EMAIL DEBUG INFO =====")
+    print(f"🔍 MAIL_SERVER: {MAIL_SERVER}")
+    print(f"🔍 MAIL_PORT: {MAIL_PORT}")
+    print(f"🔍 MAIL_USE_TLS: {MAIL_USE_TLS}")
+    print(f"🔍 MAIL_USERNAME: {MAIL_USERNAME}")
+    print(f"🔍 MAIL_PASSWORD: {'SET' if MAIL_PASSWORD else 'NOT SET'}")
+    print(f"🔍 MAIL_FROM: {MAIL_FROM}")
+    print(f"🔍 =============================")
+    
     if not MAIL_USERNAME or not MAIL_PASSWORD:
         print(f"⚠ Email not configured. OTP for {email}: {otp}")
         return True
@@ -253,17 +265,35 @@ def send_otp_email_async(email, otp, username):
 
         msg.attach(MIMEText(html_body, 'html'))
 
-        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT)
-        if MAIL_USE_TLS:
-            server.starttls()
+        print(f"🔍 Attempting to connect to {MAIL_SERVER}:{MAIL_PORT}...")
+        
+        # For port 465 (SSL)
+        if MAIL_PORT == 465:
+            print(f"🔍 Using SSL connection (port 465)")
+            context = ssl.create_default_context()
+            server = smtplib.SMTP_SSL(MAIL_SERVER, MAIL_PORT, context=context)
+        else:
+            # For port 587 (TLS)
+            print(f"🔍 Using TLS connection (port 587)")
+            server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT)
+            if MAIL_USE_TLS:
+                server.starttls()
+        
+        print(f"🔍 Logging in as {MAIL_USERNAME}...")
         server.login(MAIL_USERNAME, MAIL_PASSWORD)
+        
+        print(f"🔍 Sending email to {email}...")
         server.send_message(msg)
         server.quit()
         
-        print(f"✓ Email sent to {email}")
+        print(f"✓ Email sent successfully to {email}")
         return True
+        
     except Exception as e:
-        print(f"✗ Email send error: {e}")
+        print(f"✗ Email send error: {str(e)}")
+        print(f"✗ Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def send_otp_email(email, otp, username):
