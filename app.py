@@ -1186,7 +1186,7 @@ def get_shipments():
 @app.route('/export-combined', methods=['GET'])
 @login_required
 def export_combined():
-    """Export all invoices AND shipments to ONE Excel sheet with S.No"""
+    """Export all invoices AND shipments HORIZONTALLY (side-by-side)"""
     try:
         user_id = get_user_id()
         
@@ -1222,48 +1222,63 @@ def export_combined():
         
         current_row = 1
         
-        # ===== INVOICES SECTION =====
-        ws[f'A{current_row}'] = "INVOICES"
-        ws[f'A{current_row}'].font = Font(bold=True, size=14, color="FFFFFF")
-        ws[f'A{current_row}'].fill = PatternFill(start_color="1b5e20", end_color="1b5e20", fill_type="solid")
-        current_row += 1
+        # ===== HEADER ROW =====
+        headers = ['S.No', 'Invoice Number', 'Invoice Date', 'Terms of Payment', 
+                   'Terms of Delivery', 'Currency', 'Amount',
+                   'Ship Bill No', 'Ship Billing Date']
         
-        # Invoice headers with S.No
-        invoice_headers = ['S.No', 'Invoice Number', 'Invoice Date', 'Terms of Payment', 
-                          'Terms of Delivery', 'Currency', 'Amount']
-        for col, header in enumerate(invoice_headers, 1):
+        # Add headers
+        for col, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col)
             cell.value = header
-            cell.fill = PatternFill(start_color="2e7d32", end_color="2e7d32", fill_type="solid")
+            cell.fill = PatternFill(start_color="1b5e20", end_color="1b5e20", fill_type="solid")
             cell.font = Font(bold=True, color="FFFFFF")
             cell.alignment = Alignment(horizontal="center", vertical="center")
         current_row += 1
         
-        # Invoice data with S.No
-        sno = 1
-        for row in invoice_rows:
-            ws.cell(row=current_row, column=1).value = sno
-            ws.cell(row=current_row, column=2).value = row['invoice_number']
-            ws.cell(row=current_row, column=3).value = row['invoice_date']
-            ws.cell(row=current_row, column=4).value = row['terms_of_payment'] or ''
-            ws.cell(row=current_row, column=5).value = row['terms_of_delivery'] or ''
-            ws.cell(row=current_row, column=6).value = row['currency'] or ''
-            ws.cell(row=current_row, column=7).value = row['amount'] or ''
-            sno += 1
+        # ===== DATA ROWS =====
+        # Combine invoice and shipment data (match by index)
+        max_rows = max(len(invoice_rows), len(shipment_rows))
+        
+        for i in range(max_rows):
+            sno = i + 1
+            
+            # Get invoice data if available
+            if i < len(invoice_rows):
+                inv = invoice_rows[i]
+                inv_data = [
+                    inv['invoice_number'],
+                    inv['invoice_date'],
+                    inv['terms_of_payment'] or '',
+                    inv['terms_of_delivery'] or '',
+                    inv['currency'] or '',
+                    inv['amount'] or ''
+                ]
+            else:
+                inv_data = ['', '', '', '', '', '']
+            
+            # Get shipment data if available
+            if i < len(shipment_rows):
+                ship = shipment_rows[i]
+                ship_data = [
+                    ship['ship_bill_no'],
+                    ship['ship_billing_date']
+                ]
+            else:
+                ship_data = ['', '']
+            
+            # Write row
+            row_data = [sno] + inv_data + ship_data
+            for col, value in enumerate(row_data, 1):
+                ws.cell(row=current_row, column=col).value = value
+            
             current_row += 1
         
-        # Blank row
+        # ===== SUMMARY SECTION =====
         current_row += 2
+        summary_headers = ['Summary', 'Count']
         
-        # ===== SHIPMENTS SECTION =====
-        ws[f'A{current_row}'] = "SHIPMENTS"
-        ws[f'A{current_row}'].font = Font(bold=True, size=14, color="FFFFFF")
-        ws[f'A{current_row}'].fill = PatternFill(start_color="1b5e20", end_color="1b5e20", fill_type="solid")
-        current_row += 1
-        
-        # Shipment headers with S.No
-        shipment_headers = ['S.No', 'Ship Bill No', 'Ship Billing Date']
-        for col, header in enumerate(shipment_headers, 1):
+        for col, header in enumerate(summary_headers, 1):
             cell = ws.cell(row=current_row, column=col)
             cell.value = header
             cell.fill = PatternFill(start_color="2e7d32", end_color="2e7d32", fill_type="solid")
@@ -1271,16 +1286,19 @@ def export_combined():
             cell.alignment = Alignment(horizontal="center", vertical="center")
         current_row += 1
         
-        # Shipment data with S.No
-        sno = 1
-        for row in shipment_rows:
-            ws.cell(row=current_row, column=1).value = sno
-            ws.cell(row=current_row, column=2).value = row['ship_bill_no']
-            ws.cell(row=current_row, column=3).value = row['ship_billing_date']
-            sno += 1
+        # Summary data
+        summary_data = [
+            ['Total Invoices', len(invoice_rows)],
+            ['Total Shipments', len(shipment_rows)],
+            ['Total Entries', max_rows]
+        ]
+        
+        for row_data in summary_data:
+            for col, value in enumerate(row_data, 1):
+                ws.cell(row=current_row, column=col).value = value
             current_row += 1
         
-        # Auto-size columns
+        # ===== AUTO-SIZE COLUMNS =====
         for column in ws.columns:
             max_length = 0
             column_letter = column[0].column_letter
@@ -1311,7 +1329,7 @@ def export_combined():
     
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
-
+    
 # ============================================================================
 # ERROR HANDLERS
 # ============================================================================
