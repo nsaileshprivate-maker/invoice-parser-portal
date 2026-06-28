@@ -376,16 +376,6 @@
             background-color: #1565c0;
         }
 
-        .btn-danger {
-            background-color: #d32f2f;
-            color: white;
-            font-size: 13px;
-        }
-
-        .btn-danger:hover {
-            background-color: #b71c1c;
-        }
-
         /* ============== ADD ROW BUTTON ============== */
         .add-row-section {
             margin-top: 30px;
@@ -488,7 +478,6 @@
         .action-bar-left {
             display: flex;
             gap: 10px;
-            flex-wrap: wrap;
         }
 
         /* ============== BUNDLE SECTIONS ============== */
@@ -749,7 +738,6 @@
                 <div class="action-bar">
                     <div class="action-bar-left">
                         <button class="btn btn-export" onclick="exportCombined()">📊 Export All Data</button>
-                        <button class="btn btn-danger" onclick="showDeleteById()">🗑️ Delete by ID</button>
                     </div>
                 </div>
 
@@ -768,7 +756,6 @@
                 <div class="action-bar">
                     <div class="action-bar-left">
                         <button class="btn btn-export" onclick="exportCombined()">📊 Export All Data</button>
-                        <button class="btn btn-danger" onclick="showDeleteById()">🗑️ Delete by ID</button>
                     </div>
                 </div>
 
@@ -787,7 +774,6 @@
                 <div class="action-bar">
                     <div class="action-bar-left">
                         <button class="btn btn-export" onclick="exportCombined()">📊 Export All Data</button>
-                        <button class="btn btn-danger" onclick="showDeleteById()">🗑️ Delete by ID</button>
                     </div>
                 </div>
 
@@ -820,7 +806,6 @@
                 <div class="action-bar">
                     <div class="action-bar-left">
                         <button class="btn btn-export" onclick="exportCombined()">📊 Export All Data</button>
-                        <button class="btn btn-danger" onclick="showDeleteById()">🗑️ Delete by ID</button>
                     </div>
                 </div>
 
@@ -1507,7 +1492,6 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    row.submittedId = data.id;
                     showMessage('invoice', `✓ Invoice submitted successfully (ID: ${data.id})`, 'success');
                     setTimeout(() => {
                         removeInvoiceRow(rowId);
@@ -1522,37 +1506,8 @@
         }
 
         function removeInvoiceRow(rowId) {
-            const row = state.invoiceRows.find(r => r.id === rowId);
-            if (!row) return;
-            
-            if (row.submittedId) {
-                if (!confirm('⚠️ This data is saved in the database. Delete it permanently?')) {
-                    return;
-                }
-                
-                fetch('/api/delete-invoice/' + row.submittedId, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        document.getElementById(rowId)?.remove();
-                        state.invoiceRows = state.invoiceRows.filter(r => r.id !== rowId);
-                        showMessage('invoice', '✓ Invoice deleted from database', 'success');
-                    } else {
-                        showMessage('invoice', '✗ Error: ' + data.message, 'error');
-                    }
-                })
-                .catch(error => {
-                    showMessage('invoice', '✗ Error: ' + error.message, 'error');
-                });
-            } else {
-                document.getElementById(rowId)?.remove();
-                state.invoiceRows = state.invoiceRows.filter(r => r.id !== rowId);
-            }
+            document.getElementById(rowId)?.remove();
+            state.invoiceRows = state.invoiceRows.filter(r => r.id !== rowId);
         }
 
         // ============================================================================
@@ -1708,7 +1663,6 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    row.submittedId = data.id;
                     showMessage('shipment', `✓ Shipment submitted successfully (ID: ${data.id})`, 'success');
                     setTimeout(() => {
                         removeShipmentRow(rowId);
@@ -1723,104 +1677,8 @@
         }
 
         function removeShipmentRow(rowId) {
-            const row = state.shipmentRows.find(r => r.id === rowId);
-            if (!row) return;
-            
-            if (row.submittedId) {
-                if (!confirm('⚠️ This data is saved in the database. Delete it permanently?')) {
-                    return;
-                }
-                
-                fetch('/api/delete-shipment/' + row.submittedId, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        document.getElementById(rowId)?.remove();
-                        state.shipmentRows = state.shipmentRows.filter(r => r.id !== rowId);
-                        showMessage('shipment', '✓ Shipment deleted from database', 'success');
-                    } else {
-                        showMessage('shipment', '✗ Error: ' + data.message, 'error');
-                    }
-                })
-                .catch(error => {
-                    showMessage('shipment', '✗ Error: ' + error.message, 'error');
-                });
-            } else {
-                document.getElementById(rowId)?.remove();
-                state.shipmentRows = state.shipmentRows.filter(r => r.id !== rowId);
-            }
-        }
-
-        // ============================================================================
-        // DELETE BY ID FUNCTIONS
-        // ============================================================================
-
-        function showDeleteById() {
-            const idType = prompt('Enter type to delete:\n1 = Invoice ID\n2 = Shipment ID\n\nEnter 1 or 2:');
-            if (!idType) return;
-            
-            const id = prompt('Enter the ID number (from Excel column):');
-            if (!id) return;
-            
-            if (idType === '1') {
-                deleteInvoiceById(id);
-            } else if (idType === '2') {
-                deleteShipmentById(id);
-            } else {
-                alert('Invalid option. Please enter 1 or 2.');
-            }
-        }
-
-        function deleteInvoiceById(id) {
-            if (!confirm(`⚠️ WARNING: This will permanently delete Invoice ID ${id}. This CANNOT be undone!\n\nAre you sure?`)) return;
-            
-            fetch('/api/delete-invoice/' + id, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    showMessage('invoice', `✓ Invoice ID ${id} deleted successfully`, 'success');
-                    showMessage('shipment', `✓ Invoice ID ${id} deleted successfully`, 'success');
-                    showMessage('bundle-invoice', `✓ Invoice ID ${id} deleted successfully`, 'success');
-                } else {
-                    showMessage('invoice', '✗ Error: ' + data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('invoice', '✗ Error: ' + error.message, 'error');
-            });
-        }
-
-        function deleteShipmentById(id) {
-            if (!confirm(`⚠️ WARNING: This will permanently delete Shipment ID ${id}. This CANNOT be undone!\n\nAre you sure?`)) return;
-            
-            fetch('/api/delete-shipment/' + id, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    showMessage('shipment', `✓ Shipment ID ${id} deleted successfully`, 'success');
-                    showMessage('bundle-shipment', `✓ Shipment ID ${id} deleted successfully`, 'success');
-                } else {
-                    showMessage('shipment', '✗ Error: ' + data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('shipment', '✗ Error: ' + error.message, 'error');
-            });
+            document.getElementById(rowId)?.remove();
+            state.shipmentRows = state.shipmentRows.filter(r => r.id !== rowId);
         }
 
         // ============================================================================

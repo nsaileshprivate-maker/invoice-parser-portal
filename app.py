@@ -464,6 +464,7 @@ def extract_shipment_data(pdf_path):
                 if text:
                     full_text += text + "\n"
             
+            # Print first 1000 chars for debugging
             print("🔍 ===== SHIPPING BILL TEXT (first 1000 chars) =====")
             print(full_text[:1000])
             print("🔍 =================================================")
@@ -1262,13 +1263,13 @@ def get_shipments():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # ============================================================================
-# EXPORT ENDPOINT - WITH DELETE BUTTON & THREE BLANK COLUMNS
+# EXPORT ENDPOINT - CLEAN VERSION
 # ============================================================================
 
 @app.route('/export-combined', methods=['GET'])
 @login_required
 def export_combined():
-    """Export all invoices with matched shipments - with Delete column"""
+    """Export all invoices with matched shipments by invoice number"""
     try:
         user_id = get_user_id()
         
@@ -1305,8 +1306,7 @@ def export_combined():
                 if inv_num not in shipment_map:
                     shipment_map[inv_num] = {
                         'shipBillNo': ship['ship_bill_no'],
-                        'shipBillingDate': ship['ship_billing_date'],
-                        'shipmentId': ship['id']
+                        'shipBillingDate': ship['ship_billing_date']
                     }
         
         # Create workbook
@@ -1317,12 +1317,9 @@ def export_combined():
         current_row = 1
         
         # ===== HEADER ROW =====
-        # All data columns + 3 blank columns + Delete column + ID columns
         headers = ['S.No', 'Invoice Number', 'Invoice Date', 'Terms of Payment', 
                    'Terms of Delivery', 'Currency', 'Amount',
-                   'Ship Bill No', 'Ship Billing Date',
-                   '', '', '',  # Three blank columns
-                   '🗑️ Delete', 'Invoice ID', 'Shipment ID']
+                   'Ship Bill No', 'Ship Billing Date']
         
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col)
@@ -1342,14 +1339,9 @@ def export_combined():
         sno = 1
         for invoice in invoice_rows:
             inv_num = invoice['invoice_number']
-            inv_id = invoice['id']
             
             # Check if this invoice has a matching shipment
             ship_data = shipment_map.get(inv_num, {})
-            shipment_id = ship_data.get('shipmentId', '')
-            
-            # Delete marker
-            delete_marker = '🗑️' if (shipment_id or inv_id) else ''
             
             row_data = [
                 sno,
@@ -1360,13 +1352,7 @@ def export_combined():
                 invoice['currency'] or '',
                 invoice['amount'] or '',
                 ship_data.get('shipBillNo', ''),
-                ship_data.get('shipBillingDate', ''),
-                '',  # Blank 1
-                '',  # Blank 2
-                '',  # Blank 3
-                delete_marker,
-                inv_id,
-                shipment_id
+                ship_data.get('shipBillingDate', '')
             ]
             
             for col, value in enumerate(row_data, 1):
@@ -1379,37 +1365,9 @@ def export_combined():
                     top=Side(style='thin'),
                     bottom=Side(style='thin')
                 )
-                # Highlight Delete column
-                if col == 13:
-                    cell.font = Font(size=14, color="FF0000")
             
             sno += 1
             current_row += 1
-        
-        # ===== ADD INSTRUCTIONS =====
-        current_row += 2
-        instruction_cell = ws.cell(row=current_row, column=1)
-        instruction_cell.value = "📌 INSTRUCTIONS:"
-        instruction_cell.font = Font(bold=True, size=12)
-        current_row += 1
-        
-        instructions = [
-            "1. To delete a row, copy the Invoice ID or Shipment ID from the last two columns",
-            "2. Go to the portal and click the 'Delete by ID' button",
-            "3. Enter the type (1 = Invoice, 2 = Shipment) and the ID",
-            "4. Confirm deletion - the row will be permanently removed from the database"
-        ]
-        
-        for instruction in instructions:
-            cell = ws.cell(row=current_row, column=1)
-            cell.value = instruction
-            cell.font = Font(size=11)
-            current_row += 1
-        
-        current_row += 1
-        note_cell = ws.cell(row=current_row, column=1)
-        note_cell.value = "⚠️ WARNING: Deletion is PERMANENT and cannot be undone!"
-        note_cell.font = Font(size=11, color="FF0000", bold=True)
         
         # Auto-size columns
         for column in ws.columns:
@@ -1421,7 +1379,7 @@ def export_combined():
                         max_length = len(str(cell.value))
                 except:
                     pass
-            adjusted_width = min(max_length + 3, 50)
+            adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
         
         # Save to bytes
@@ -1439,60 +1397,6 @@ def export_combined():
             download_name=f'{username}_combined_data.xlsx'
         )
     
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-# ============================================================================
-# DELETE API ENDPOINTS
-# ============================================================================
-
-@app.route('/api/delete-invoice/<int:invoice_id>', methods=['DELETE'])
-@login_required
-def delete_invoice(invoice_id):
-    """Delete a specific invoice from database"""
-    try:
-        user_id = get_user_id()
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('DELETE FROM invoices WHERE id = %s AND user_id = %s', (invoice_id, user_id))
-        deleted = cursor.rowcount > 0
-        
-        conn.commit()
-        cursor.close()
-        return_db_connection(conn)
-        
-        if deleted:
-            return jsonify({'status': 'success', 'message': 'Invoice deleted successfully'})
-        else:
-            return jsonify({'status': 'error', 'message': 'Invoice not found'}), 404
-        
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-@app.route('/api/delete-shipment/<int:shipment_id>', methods=['DELETE'])
-@login_required
-def delete_shipment(shipment_id):
-    """Delete a specific shipment from database"""
-    try:
-        user_id = get_user_id()
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('DELETE FROM shipments WHERE id = %s AND user_id = %s', (shipment_id, user_id))
-        deleted = cursor.rowcount > 0
-        
-        conn.commit()
-        cursor.close()
-        return_db_connection(conn)
-        
-        if deleted:
-            return jsonify({'status': 'success', 'message': 'Shipment deleted successfully'})
-        else:
-            return jsonify({'status': 'error', 'message': 'Shipment not found'}), 404
-        
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
